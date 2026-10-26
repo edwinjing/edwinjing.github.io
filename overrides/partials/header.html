@@ -1,0 +1,62 @@
+{# Independent academic navigation; native palette and EdwinOS optics retained. #}
+<header class="md-header md-header--shadow edwinos-academic-header" data-md-component="header" data-academic-header>
+  <div class="edwinos-tab-glass-track" aria-hidden="true"><span class="edwinos-tab-glass"></span></div>
+  <div class="edwinos-header-glass" aria-hidden="true">
+    {% for layer in range(1, 8) %}<div class="edwinos-header-glass__layer edwinos-header-glass__layer--{{ layer }}"></div>{% endfor %}
+    <div class="edwinos-header-glass__fade"></div>
+  </div>
+  <nav class="md-header__inner md-grid" aria-label="Academic homepage">
+    <a class="academic-header-name" href="{{ '/' | url }}#about">Chen Jing (经宸)</a>
+    <div id="academic-chapters" class="academic-header-panel">
+      <div class="academic-header-panel-surface" aria-hidden="true"></div>
+      <nav class="md-tabs" aria-label="Homepage sections">
+        <div class="md-grid"><ul class="md-tabs__list">
+        {% for id, label in [('about', 'About'), ('news', 'News'), ('education', 'Education'), ('experience', 'Experience'), ('publications', 'Publications'), ('workshops', 'Workshops'), ('honors', 'Honors')] %}
+          <li class="md-tabs__item"><a class="md-tabs__link" href="{{ '/' | url }}#{{ id }}" data-academic-section="{{ id }}"{% if loop.first %} aria-current="location"{% endif %}>{{ label }}</a></li>
+        {% endfor %}
+        </ul></div>
+      </nav>
+    </div>
+    <div class="academic-header-controls">
+      <button class="academic-header-menu md-icon" type="button" aria-label="Open section navigation" aria-expanded="false" aria-controls="academic-chapters">{% include '.icons/material/menu.svg' %}</button>
+      <a class="academic-header-github md-icon" href="https://github.com/SPIRAL-EDWIN" aria-label="Chen Jing on GitHub" title="GitHub">{% include '.icons/fontawesome/brands/github.svg' %}</a>
+      {% if config.theme.palette and not config.theme.palette is mapping %}
+        {% include 'partials/palette.html' %}
+        {% include 'partials/javascripts/palette.html' %}
+      {% endif %}
+    </div>
+  </nav>
+  <noscript><style>
+    @media (max-width: 1000px) {
+      .edwinos-academic-header { margin-bottom: 58px !important; }
+      .edwinos-academic-header .academic-header-panel { position: absolute; top: 100%; left: 8px; right: 8px; height: 58px; }
+      .edwinos-academic-header .academic-header-panel .md-grid { justify-content: flex-start !important; }
+      .edwinos-academic-header .academic-header-panel-surface { display: block; position: absolute; inset: 0; border-radius: 24px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+    }
+  </style></noscript>
+  <script>
+    window.__edwinosTabGlassGeometry = function(header, destination, reveal) {
+      var rail=header.querySelector('.md-tabs .md-grid'), tabs=header.querySelector('.md-tabs');
+      var track=header.querySelector('.edwinos-tab-glass-track');
+      var id=destination ? new URL(destination,location.href).hash.slice(1) : (header.dataset.activeSection || 'about');
+      var selected=Array.from(header.querySelectorAll('[data-academic-section]')).find(function(a){return a.dataset.academicSection===id;});
+      if (!selected || (header.dataset.compact==='true' && header.dataset.menuOpen!=='true')) return {selected:false};
+      if(reveal!==false){var r=rail.getBoundingClientRect(), s=selected.getBoundingClientRect();
+        if(s.left<r.left)rail.scrollLeft+=s.left-r.left-8;
+        else if(s.right>r.right)rail.scrollLeft+=s.right-r.right+8;
+      }
+      var h=header.getBoundingClientRect(), t=tabs.getBoundingClientRect(), b=selected.getBoundingClientRect();
+      track.style.cssText='left:'+(t.left-h.left)+'px;top:'+(t.top-h.top)+'px;width:'+t.width+'px;height:'+t.height+'px';
+      return {selected:true,key:selected.href,x:b.left-t.left+1,y:b.top-t.top,width:Math.max(0,b.width-2),height:b.height};
+    };
+    (function(){
+      var h=document.currentScript.parentElement, list=h.querySelector('.md-tabs__list');
+      var required=h.querySelector('.academic-header-name').offsetWidth+list.scrollWidth+112+64;
+      h.dataset.compact=String(innerWidth<required);
+      var panel=h.querySelector('.academic-header-panel');panel.inert=h.dataset.compact==='true';
+      var b=window.__edwinosTabGlassGeometry(h,location.hash||'#about');
+      var s=h.querySelector('.edwinos-tab-glass');h.dataset.edwinosTabGlassReady='1';s.hidden=!b.selected;
+      if(b.selected){s.style.cssText='left:'+b.x+'px;top:'+b.y+'px;width:'+b.width+'px;height:'+b.height+'px';s.dataset.edwinosTabSelected=b.key;}
+    })();
+  </script>
+</header>

@@ -1,0 +1,824 @@
+/**
+ * Obsidian / MkDocs fragment links
+ *
+ * Owns fragment/hash navigation after build-time block-anchor generation.
+ * When a URL contains a hash (for example #d098de or a heading slug), highlight
+ * the actual target sentence, paragraph, list item, table row, code block, or
+ * heading instead of leaving readers on a visually ambiguous full page. It
+ * also realigns the current target after layout-changing runtimes settle.
+ */
+(function () {
+  "use strict";
+
+  var HIGHLIGHT_CLASS = "block-highlight";
+  var HIGHLIGHT_ACTIVE_CLASS = "block-highlight--active";
+  var HIGHLIGHT_PINNED_CLASS = "block-highlight--pinned";
+  var HIGHLIGHT_FADING_CLASS = "block-highlight--fading";
+  var TOC_SELECTED_CLASS = "edwinos-toc-link--selected";
+  var CONTENT_SELECTOR = ".md-content__inner";
+  var HASH_LAYOUT_SETTLED_EVENT = "edwinos:hash-layout-settled";
+  var HEADING_SCROLL_MIN_DURATION = 420;
+  var HEADING_SCROLL_MAX_DURATION = 1500;
+  var HEADING_SCROLL_DURATION_PER_ROOT_VIEWPORT = 180;
+  var HEADING_SCROLL_RAMP = 0.22;
+  // Material's TOC scrollspy commits its active hash after a short debounce.
+  // Leave enough time for that pass, then restore the exact entry the reader
+  // selected (important for headings near the document's lower scroll limit).
+  var HEADING_SCROLL_SETTLE_DELAY = 650;
+  var HEADING_HOLD_DURATION = 500;
+  var documentSequence = 0;
+  var delayedHighlightTimers = [];
+  var removalTimers = [];
+  var tocSyncTimers = [];
+  var tocSyncSequence = 0;
+  var headingScrollFrame = null;
+  var tocSelectionGuardUntil = 0;
+  var tocSelectionClearTimer = null;
+  var headingNavigationTarget = null;
+  var pendingPageFragment = null;
+  var searchNavigationTarget = null;
+  var SEARCH_SETTLE_LIMIT = 15000;
+  var HEADING_SELECTOR = "h1, h2, h3, h4, h5, h6";
+  var HIGHLIGHTABLE_SELECTOR = [
+    ".admonition-title",
+    "p",
+    "li",
+    "tr",
+    "dt",
+    "dd",
+    "blockquote",
+    "pre",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6"
+  ].join(", ");
+
+  function contentRoot() {
+    return document.querySelector(CONTENT_SELECTOR) || document.querySelector(".md-content") || document.body;
+  }
+
+  function escapeSelector(value) {
+    if (window.CSS && typeof window.CSS.escape === "function") {
+      return window.CSS.escape(value);
+    }
+    return value.replace(/["\\#.;?+*~':!^$[\]()=>|/@]/g, "\\$&");
+  }
+
+  function decodeHash(hash) {
+    if (!hash) return "";
+    var raw = hash.charAt(0) === "#" ? hash.slice(1) : hash;
+    try {
+      return decodeURIComponent(raw);
+    } catch (_error) {
+      return raw;
+    }
+  }
+
+  function findTarget(hash) {
+    var id = decodeHash(hash);
+    if (!id) return null;
+    // Academic chapter navigation is owned by setupAcademicHeader, including
+    // direct entry and history. Never highlight an entire homepage section.
+    if (document.querySelector('[data-academic-header]') &&
+        ['about', 'news', 'education', 'experience', 'publications', 'workshops', 'honors'].includes(id)) return null;
+
+    return (
+      document.getElementById(id) ||
+      document.querySelector("[name=\"" + escapeSelector(id) + "\"]")
+    );
+  }
+
+  function meaningfulTarget(target) {
+    if (!target) return null;
+
+    var root = contentRoot();
+    if (target === root) return target;
+
+    if (target.matches && target.matches(HIGHLIGHTABLE_SELECTOR)) {
+      return target;
+    }
+
+    var closest = target.closest ? target.closest(HIGHLIGHTABLE_SELECTOR) : null;
+    if (closest && root.contains(closest)) {
+      return closest;
+    }
+
+    // Heading block anchors are often rendered as:
+    //   <h5 id="heading-slug">Title <span id="blockid"></span>...</h5>
+    var heading = target.closest ? target.closest("h1, h2, h3, h4, h5, h6") : null;
+    if (heading && root.contains(heading)) {
+      return heading;
+    }
+
+    var parent = target.parentElement;
+    while (parent && parent !== root && parent !== document.body) {
+      if (parent.matches && parent.matches(HIGHLIGHTABLE_SELECTOR)) return parent;
+      parent = parent.parentElement;
+    }
+
+    return target;
+  }
+
+  function clearHighlights() {
+    document.querySelectorAll("." + HIGHLIGHT_CLASS).forEach(function (el) {
+      el.classList.remove(
+        HIGHLIGHT_CLASS,
+        HIGHLIGHT_ACTIVE_CLASS,
+        HIGHLIGHT_PINNED_CLASS,
+        HIGHLIGHT_FADING_CLASS
+      );
+    });
+  }
+
+  function cancelTimers(timers) {
+    timers.forEach(function (timer) {
+      window.clearTimeout(timer);
+    });
+    timers.length = 0;
+  }
+
+  function cancelHeadingScroll() {
+    if (headingScrollFrame === null) return;
+    window.cancelAnimationFrame(headingScrollFrame);
+    headingScrollFrame = null;
+  }
+
+  function cancelTocHeadingSync() {
+    tocSyncSequence += 1;
+    cancelTimers(tocSyncTimers);
+  }
+
+  function highlight(hash, options) {
+    options = options || {};
+
+    var target = findTarget(hash);
+    if (!target) return false;
+
+    var highlightTarget = meaningfulTarget(target);
+    if (!highlightTarget) return false;
+
+    cancelTimers(removalTimers);
+    clearHighlights();
+
+    if (options.scroll !== false) {
+      highlightTarget.scrollIntoView({
+        behavior: options.smooth === false ? "auto" : "smooth",
+        block: "center"
+      });
+    }
+
+    var isHeading = Boolean(
+      highlightTarget.matches && highlightTarget.matches("h1, h2, h3, h4, h5, h6")
+    );
+
+    // Heading targets remain visibly selected until another fragment is
+    // chosen. Sentence/block targets keep the existing short fade animation.
+    highlightTarget.classList.remove(
+      HIGHLIGHT_CLASS,
+      HIGHLIGHT_ACTIVE_CLASS,
+      HIGHLIGHT_PINNED_CLASS,
+      HIGHLIGHT_FADING_CLASS
+    );
+    void highlightTarget.offsetWidth;
+    highlightTarget.classList.add(
+      HIGHLIGHT_CLASS,
+      isHeading ? HIGHLIGHT_PINNED_CLASS : HIGHLIGHT_ACTIVE_CLASS
+    );
+
+    if (isHeading) {
+      // Keep the target visible through the scroll and reading hand-off, then
+      // fade only the highlight chrome; the heading text remains untouched.
+      var headingFadeDelay = typeof options.headingFadeDelay === "number"
+        ? options.headingFadeDelay
+        : HEADING_HOLD_DURATION;
+      removalTimers.push(window.setTimeout(function () {
+        highlightTarget.classList.add(HIGHLIGHT_FADING_CLASS);
+      }, headingFadeDelay));
+      return true;
+    }
+
+    removalTimers.push(window.setTimeout(function () {
+      highlightTarget.classList.remove(HIGHLIGHT_ACTIVE_CLASS);
+    }, 5000));
+
+    removalTimers.push(window.setTimeout(function () {
+      highlightTarget.classList.remove(HIGHLIGHT_CLASS);
+    }, 5200));
+
+    return true;
+  }
+
+  function normalizePath(pathname) {
+    return (pathname || window.location.pathname).replace(/\/index\.html$/, "/");
+  }
+
+  function isSamePageHashLink(link) {
+    var href = link.getAttribute("href") || "";
+    if (!href || href === "#") return false;
+
+    var url;
+    try {
+      url = new URL(href, window.location.href);
+    } catch (_error) {
+      return false;
+    }
+
+    return (
+      url.hash &&
+      url.origin === window.location.origin &&
+      normalizePath(url.pathname) === normalizePath(window.location.pathname)
+    );
+  }
+
+  function alignHeadingTarget(hash, behavior) {
+    var target = meaningfulTarget(findTarget(hash));
+    if (!target || !target.matches("h1, h2, h3, h4, h5, h6")) return 0;
+
+    var header = document.querySelector(".md-header");
+    // Leave enough breathing room below EdwinOS's translucent header/notch so
+    // the selected heading is not caught in its blur falloff.
+    var offset = (header ? header.getBoundingClientRect().height : 0) + 40;
+    var top = target.getBoundingClientRect().top + window.scrollY - offset;
+    top = Math.max(0, top);
+
+    cancelHeadingScroll();
+    if (
+      behavior !== "smooth"
+      || (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+    ) {
+      window.scrollTo({ top: top, behavior: "instant" });
+      return 0;
+    }
+
+    // Native smooth scrolling can collapse to a near-instant jump depending
+    // on the browser and page distance. Scale duration sublinearly by the
+    // number of viewports crossed so long jumps retain spatial context without
+    // making nearby headings feel sluggish.
+    var start = window.scrollY;
+    var distance = top - start;
+    var viewportHeight = Math.max(window.innerHeight || 0, 1);
+    var rootViewports = Math.sqrt(Math.abs(distance) / viewportHeight);
+    var duration = Math.min(
+      HEADING_SCROLL_MAX_DURATION,
+      Math.max(
+        HEADING_SCROLL_MIN_DURATION,
+        HEADING_SCROLL_MIN_DURATION
+          + HEADING_SCROLL_DURATION_PER_ROOT_VIEWPORT * rootViewports
+      )
+    );
+    if (Math.abs(distance) < 1) return 0;
+
+    var startedAt = null;
+    function step(timestamp) {
+      if (startedAt === null) startedAt = timestamp;
+      var progress = Math.min(1, (timestamp - startedAt) / duration);
+      // Raised-cosine velocity ramps keep velocity and acceleration continuous
+      // into and out of the steady middle section. Integrating that velocity
+      // gives the position curve below.
+      var ramp = HEADING_SCROLL_RAMP;
+      var maxVelocity = 1 / (1 - ramp);
+      var eased;
+      if (progress < ramp) {
+        eased = maxVelocity * (
+          0.5 * progress
+          - ramp * Math.sin(Math.PI * progress / ramp) / (2 * Math.PI)
+        );
+      } else if (progress <= 1 - ramp) {
+        eased = maxVelocity * (progress - 0.5 * ramp);
+      } else {
+        var remaining = 1 - progress;
+        eased = 1 - maxVelocity * (
+          0.5 * remaining
+          - ramp * Math.sin(Math.PI * remaining / ramp) / (2 * Math.PI)
+        );
+      }
+      window.scrollTo({
+        top: start + distance * eased,
+        behavior: "instant"
+      });
+      if (progress < 1) {
+        headingScrollFrame = window.requestAnimationFrame(step);
+      } else {
+        headingScrollFrame = null;
+      }
+    }
+    headingScrollFrame = window.requestAnimationFrame(step);
+    return duration;
+  }
+
+  function clearTocSelection() {
+    document.querySelectorAll("." + TOC_SELECTED_CLASS).forEach(function (item) {
+      item.classList.remove(TOC_SELECTED_CLASS);
+    });
+  }
+
+  function replaceCurrentHash(hash) {
+    var url = new URL(window.location.href);
+    url.hash = hash;
+    window.history.replaceState(
+      null,
+      "",
+      url.pathname + url.search + url.hash
+    );
+  }
+
+  function keepTocLinkVisible(link, hash) {
+    link = Array.prototype.find.call(
+      document.querySelectorAll(".md-sidebar--secondary a.md-nav__link[href*='#']"),
+      function (item) {
+        return item.hash === hash && item.getBoundingClientRect().width > 0;
+      }
+    ) || link;
+    if (!link || !link.isConnected) return;
+    var sidebar = link.closest(".md-sidebar--secondary");
+    if (sidebar) {
+      sidebar.querySelectorAll("." + TOC_SELECTED_CLASS).forEach(function (item) {
+        if (item !== link) item.classList.remove(TOC_SELECTED_CLASS);
+      });
+      link.classList.add(TOC_SELECTED_CLASS);
+    }
+
+    var scrollwrap = link.closest(".md-sidebar__scrollwrap");
+    if (!scrollwrap) return;
+
+    var linkRect = link.getBoundingClientRect();
+    var wrapRect = scrollwrap.getBoundingClientRect();
+    var padding = 24;
+    if (linkRect.top < wrapRect.top + padding) {
+      scrollwrap.scrollTop += linkRect.top - wrapRect.top - padding;
+    } else if (linkRect.bottom > wrapRect.bottom - padding) {
+      scrollwrap.scrollTop += linkRect.bottom - wrapRect.bottom + padding;
+    }
+  }
+
+  function scheduleTocHeadingSync(hash, link, behavior) {
+    cancelTocHeadingSync();
+    var syncSequence = tocSyncSequence;
+    var expectedPage = normalizePath(window.location.pathname);
+    headingNavigationTarget = { hash: hash, page: expectedPage };
+
+    function isCurrentTocNavigation(allowIntermediateHash) {
+      return syncSequence === tocSyncSequence
+        && expectedPage === normalizePath(window.location.pathname)
+        && (allowIntermediateHash || window.location.hash === hash);
+    }
+
+    function repairTocState(allowIntermediateHash) {
+      if (!isCurrentTocNavigation(allowIntermediateHash)) return;
+      var heading = meaningfulTarget(findTarget(hash));
+      if (!heading || !heading.classList.contains(HIGHLIGHT_PINNED_CLASS)) {
+        highlight(hash, { scroll: false });
+      }
+      window.requestAnimationFrame(function () {
+        if (!isCurrentTocNavigation(allowIntermediateHash)) return;
+        replaceCurrentHash(hash);
+        keepTocLinkVisible(link, hash);
+      });
+    }
+
+    var duration = alignHeadingTarget(hash, behavior || "smooth");
+    tocSelectionGuardUntil = Date.now() + duration + HEADING_SCROLL_SETTLE_DELAY;
+    highlight(hash, {
+      scroll: false,
+      headingFadeDelay: duration + HEADING_HOLD_DURATION
+    });
+    repairTocState(false);
+
+    // Repair once after the distance-aware animation/layout settling period.
+    // Material's scrollspy may expose an intermediate heading hash while the
+    // page moves. Only the still-current navigation token may restore the
+    // requested hash; clicks, history navigation, page swaps, and user input
+    // all invalidate that token before this delayed task can run.
+    tocSyncTimers.push(window.setTimeout(
+      function () { repairTocState(true); },
+      duration + HEADING_SCROLL_SETTLE_DELAY
+    ));
+  }
+
+  function cancelSearchNavigation() {
+    if (!searchNavigationTarget) return;
+    if (searchNavigationTarget.observer) searchNavigationTarget.observer.disconnect();
+    window.clearTimeout(searchNavigationTarget.expiry);
+    searchNavigationTarget = null;
+  }
+
+  function currentSearchNavigation(state) {
+    return state === searchNavigationTarget
+      && state.page === normalizePath(window.location.pathname)
+      && state.root === contentRoot();
+  }
+
+  function normalizedSearchText(text) {
+    return (text || "").normalize("NFKC").toLowerCase().replace(/\u200b/g, "");
+  }
+
+  function acceptedSearchSpan(text, terms, start, end) {
+    var words = /[\p{Script=Han}]+|(?:(?!\p{Script=Han})[\p{L}\p{N}_])+/gu;
+    var word;
+    while ((word = words.exec(text))) {
+      if (words.lastIndex <= start || word.index >= end) continue;
+      if (!/^[\p{Script=Han}]+$/u.test(word[0])) {
+        if (terms.indexOf(word[0]) !== -1) return true;
+      } else {
+        for (var i = 0; i < terms.length; i++) {
+          var term = terms[i];
+          if (!/^[\p{Script=Han}]+$/u.test(term)) continue;
+          for (var at = word[0].indexOf(term); at !== -1; at = word[0].indexOf(term, at + 1)) {
+            if (word.index + at < end && word.index + at + term.length > start) return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  function validSearchMark(mark, state) {
+    // Material marks substrings (e.g. Jing in Beijing), whereas retrieval uses
+    // complete Latin words. Validate the existing mark against its body block,
+    // including adjacent syntax spans, rather than introducing a highlighter.
+    var block = mark.closest(".arithmatex, p, pre, li, td, th, dt, dd, blockquote, div") || mark;
+    var text = normalizedSearchText(block.textContent);
+    var start = 0;
+    if (block !== mark) {
+      var prefix = document.createRange();
+      prefix.selectNodeContents(block);
+      prefix.setEnd(mark, 0);
+      start = normalizedSearchText(prefix.toString()).length;
+    }
+    return acceptedSearchSpan(text, state.terms, start, start + normalizedSearchText(mark.textContent).length);
+  }
+
+  function searchBodyTarget(state) {
+    var heading = meaningfulTarget(findTarget(state.hash));
+    if (state.hash && (!heading || !heading.matches(HEADING_SELECTOR))) return null;
+    var precedingHeadings = [], result = null;
+    // Material indexes every heading as a separate section, regardless of its
+    // level. Exiting a nested container restores its enclosing section; the
+    // most recent heading whose container still includes this node owns it.
+    var nodes = state.root.querySelectorAll(HEADING_SELECTOR + ", mark[data-md-highlight], .arithmatex");
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      if (node.matches(HEADING_SELECTOR)) {
+        if (node.id) precedingHeadings.push(node);
+        continue;
+      }
+      var section = null;
+      for (var j = precedingHeadings.length - 1; j >= 0; j--) {
+        var preceding = precedingHeadings[j];
+        var container = preceding.parentElement || state.root;
+        if (container.contains(node)) { section = preceding; break; }
+      }
+      var pageSection = !state.hash && section && section === precedingHeadings[0]
+        && section.tagName === "H1";
+      if ((section !== heading && !pageSection) || node.closest(HEADING_SELECTOR + ", [data-search-exclude]")) continue;
+      if (node.matches(".arithmatex")) {
+        if (!state.formulas.has(node)) continue;
+      } else {
+        if (!validSearchMark(node, state)) continue;
+      }
+      if (!node.matches(".arithmatex") && node.closest(".arithmatex")) {
+        // Scroll to the complete expression, never a mark splitting TeX source.
+        node = node.closest(".arithmatex");
+        state.formulas.add(node);
+      }
+      // Chromium may expose layout rects for unpainted closed-details content.
+      // Inspect disclosure state directly. Its first summary remains visible,
+      // unless a different enclosing details hides that summary as well.
+      var details = node.closest("details:not([open])");
+      while (details && state.root.contains(details)) {
+        var summary = Array.prototype.find.call(details.children, function (child) {
+          return child.tagName === "SUMMARY";
+        });
+        if (!summary || !summary.contains(node)) details.open = true;
+        details = details.parentElement && details.parentElement.closest("details:not([open])");
+      }
+      if (!node.getClientRects().length) continue;
+      result = node;
+      break;
+    }
+    return result;
+  }
+
+  function alignSearchTarget(state) {
+    if (!currentSearchNavigation(state)) return false;
+    var match = searchBodyTarget(state);
+    if (!match) return false;
+    var header = document.querySelector(".md-header");
+    var headerBottom = header ? Math.max(0, header.getBoundingClientRect().bottom) : 0;
+    var viewport = window.visualViewport;
+    var visibleHeight = viewport ? viewport.height : window.innerHeight;
+    var desiredTop = headerBottom + Math.max(0, visibleHeight - headerBottom) / 3;
+    var top = window.scrollY + match.getBoundingClientRect().top - desiredTop;
+    var scrollRoot = document.scrollingElement || document.documentElement;
+    var maxTop = Math.max(0, scrollRoot.scrollHeight - window.innerHeight);
+    window.scrollTo({ top: Math.min(maxTop, Math.max(0, top)), behavior: "instant" });
+    replaceCurrentHash(state.hash);
+    keepTocLinkVisible(null, state.hash);
+    return true;
+  }
+
+  function scheduleSearchFragment(hash) {
+    cancelTocHeadingSync();
+    cancelHeadingScroll();
+    cancelSearchNavigation();
+    headingNavigationTarget = null;
+    var root = contentRoot();
+    var state = searchNavigationTarget = {
+      hash: hash, page: normalizePath(window.location.pathname), root: root,
+      formulas: new WeakSet(), formulaSources: new WeakMap(), observer: null, expiry: null,
+      terms: normalizedSearchText(new URL(window.location.href).searchParams.get("h")).split(/\s+/).filter(Boolean)
+    };
+    tocSelectionGuardUntil = Date.now() + SEARCH_SETTLE_LIMIT;
+    highlight(hash, { scroll: false });
+    keepTocLinkVisible(null, hash);
+
+    // MathJax removes Material's marks from TeX to protect rendering. Retain
+    // expression identity while source is present; no second highlighter or
+    // additional formula typesetting/scroll implementation is introduced.
+    root.querySelectorAll(".arithmatex").forEach(function (formula) {
+      var source = normalizedSearchText(formula.textContent);
+      state.formulaSources.set(formula, source);
+      if (acceptedSearchSpan(source, state.terms, 0, source.length)) state.formulas.add(formula);
+    });
+    if (typeof MutationObserver === "function") {
+      state.observer = new MutationObserver(function (records) {
+        if (!currentSearchNavigation(state)) return;
+        var relevant = false;
+        records.forEach(function (record) {
+          record.addedNodes.forEach(function (node) {
+            if (node.nodeType !== 1) return;
+            var marks = node.matches("mark[data-md-highlight]") ? [node]
+              : Array.from(node.querySelectorAll("mark[data-md-highlight]"));
+            if (!marks.length && !node.matches("mjx-container")) return;
+            relevant = true;
+            marks.forEach(function (mark) {
+              var formula = mark.closest(".arithmatex")
+                || (record.target.closest && record.target.closest(".arithmatex"));
+              if (formula && root.contains(formula)) {
+                var source = state.formulaSources.get(formula) || normalizedSearchText(formula.textContent);
+                if (acceptedSearchSpan(source, state.terms, 0, source.length)) state.formulas.add(formula);
+              }
+            });
+          });
+        });
+        if (relevant) alignSearchTarget(state);
+      });
+      state.observer.observe(root, { childList: true, subtree: true });
+    }
+    alignSearchTarget(state);
+    // Title-only hits retain the existing heading fallback. A delayed manifest
+    // can still supply body marks before the bounded hand-off expires.
+    tocSyncTimers.push(window.setTimeout(function () {
+      if (!currentSearchNavigation(state)) return;
+      if (!alignSearchTarget(state)) alignHeadingTarget(hash, "instant");
+      replaceCurrentHash(hash);
+      keepTocLinkVisible(null, hash);
+    }, HEADING_SCROLL_SETTLE_DELAY));
+    state.expiry = window.setTimeout(function () {
+      if (state !== searchNavigationTarget) return;
+      cancelSearchNavigation();
+      tocSelectionGuardUntil = 0;
+    }, SEARCH_SETTLE_LIMIT);
+  }
+
+  function handleHashLinkClick(event) {
+    var link = event.target.closest ? event.target.closest("a[href]") : null;
+    if (!link) return;
+    var isSearchResult = Boolean(link.classList && link.classList.contains("md-search-result__link"))
+      || Boolean(link.closest(".md-search-result"));
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (link.target && link.target !== "_self") return;
+
+    var url;
+    try { url = new URL(link.getAttribute("href"), window.location.href); }
+    catch (_error) { return; }
+    // Capture the intended destination before Material's outgoing-page
+    // scrollspy can replace its fragment during an instant-page transition.
+    // Material still owns loading and history for cross-page links.
+    pendingPageFragment = null;
+    cancelSearchNavigation();
+    if (url.origin === window.location.origin && url.hash
+      && normalizePath(url.pathname) !== normalizePath(window.location.pathname)) {
+      pendingPageFragment = {
+        page: normalizePath(url.pathname),
+        sourcePage: normalizePath(window.location.pathname),
+        hash: url.hash
+      };
+      cancelTocHeadingSync();
+      cancelHeadingScroll();
+      headingNavigationTarget = null;
+      return;
+    }
+    if (!url.hash && isSearchResult && url.searchParams.get("h")
+      && url.origin === window.location.origin && normalizePath(url.pathname) === normalizePath(window.location.pathname)) {
+      event.preventDefault();
+      event.stopPropagation();
+      history.pushState(null, "", url.pathname + url.search);
+      scheduleSearchFragment("");
+      return;
+    }
+    if (!isSamePageHashLink(link)) return;
+    if (!findTarget(url.hash)) return;
+    cancelTocHeadingSync();
+
+    // Own TOC navigation so Material/native fragment scrolling cannot race the
+    // deliberate EdwinOS animation or snap it to the final position early.
+    if (link.closest(".md-nav--secondary, [data-md-component='toc']")) {
+      event.preventDefault();
+      event.stopPropagation();
+      history.pushState(null, "", url.pathname + url.search + url.hash);
+      scheduleTocHeadingSync(url.hash, link);
+      return;
+    }
+
+    // Material handles links on body before a document bubble listener. Capture
+    // the same-page case first so its pushState doesn't swallow our highlight.
+    event.preventDefault();
+    event.stopPropagation();
+    history.pushState(null, "", url.pathname + url.search + url.hash);
+    var target = meaningfulTarget(findTarget(url.hash));
+    if (target && target.matches("h1, h2, h3, h4, h5, h6")) {
+      if (isSearchResult && url.searchParams.get("h")) scheduleSearchFragment(url.hash);
+      else scheduleTocHeadingSync(url.hash, null, "smooth");
+    } else {
+      headingNavigationTarget = null;
+      highlight(url.hash);
+    }
+  }
+
+  function highlightCurrentHash() {
+    if (!window.location.hash) return;
+    var sequence = documentSequence;
+    var expectedLocation = window.location.pathname + window.location.search + window.location.hash;
+
+    // Run twice: once quickly, once after Material/MathJax/layout plugins settle.
+    delayedHighlightTimers.push(window.setTimeout(function () {
+      if (sequence !== documentSequence || expectedLocation !== window.location.pathname + window.location.search + window.location.hash) return;
+      highlight(window.location.hash, { scroll: false });
+    }, 80));
+
+    delayedHighlightTimers.push(window.setTimeout(function () {
+      if (sequence !== documentSequence || expectedLocation !== window.location.pathname + window.location.search + window.location.hash) return;
+      highlight(window.location.hash, { scroll: false });
+    }, 520));
+  }
+
+  /**
+   * Re-align the exact fragment target after a runtime reports layout settling.
+   *
+   * MathJax used to duplicate this hash-scroll implementation. Keeping the
+   * double animation-frame delay, header offset, and instant behavior here
+   * preserves that hand-off while making fragment positioning single-owner.
+   */
+  function realignHashAfterLayout(event) {
+    if (searchNavigationTarget) {
+      var searchTarget = searchNavigationTarget;
+      window.requestAnimationFrame(function () {
+        window.requestAnimationFrame(function () { alignSearchTarget(searchTarget); });
+      });
+      return;
+    }
+    var hash = event && event.detail && event.detail.hash;
+    // Material can replace the URL with the preceding section while the target
+    // sits below its scrollspy threshold. The still-current explicit fragment
+    // wins through layout settling; reader input invalidates this target.
+    if (headingNavigationTarget
+      && headingNavigationTarget.page === normalizePath(window.location.pathname)) {
+      hash = headingNavigationTarget.hash;
+    } else if (!hash || hash !== window.location.hash) return;
+
+    var target = findTarget(hash);
+    if (!target) return;
+    var heading = meaningfulTarget(target);
+    if (heading && heading.matches("h1, h2, h3, h4, h5, h6")
+      && !headingNavigationTarget) return;
+
+    var sequence = documentSequence;
+    var expectedPage = normalizePath(window.location.pathname);
+    var navigationTarget = headingNavigationTarget;
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(function () {
+        if (
+          sequence !== documentSequence ||
+          expectedPage !== normalizePath(window.location.pathname)
+          || navigationTarget !== headingNavigationTarget
+        ) return;
+
+        if (navigationTarget) {
+          scheduleTocHeadingSync(hash, null, "instant");
+          return;
+        }
+
+        var header = document.querySelector(".md-header");
+        var offset = (header ? header.getBoundingClientRect().height : 0) + 40;
+        var top = target.getBoundingClientRect().top + window.scrollY - offset;
+        window.scrollTo({ top: Math.max(0, top), behavior: "instant" });
+      });
+    });
+  }
+
+  function run() {
+    documentSequence += 1;
+    cancelTimers(delayedHighlightTimers);
+    cancelTimers(removalTimers);
+    cancelTocHeadingSync();
+    cancelHeadingScroll();
+    cancelSearchNavigation();
+    tocSelectionGuardUntil = 0;
+    window.clearTimeout(tocSelectionClearTimer);
+    clearHighlights();
+    clearTocSelection();
+    headingNavigationTarget = null;
+    var hash = window.location.hash;
+    var page = normalizePath(window.location.pathname);
+    if (pendingPageFragment && pendingPageFragment.page === page) {
+      hash = pendingPageFragment.hash;
+      replaceCurrentHash(hash);
+      pendingPageFragment = null;
+    } else if (pendingPageFragment && pendingPageFragment.sourcePage !== page) {
+      pendingPageFragment = null;
+    }
+    var target = meaningfulTarget(findTarget(hash));
+    if (!hash && new URL(window.location.href).searchParams.get("h")) {
+      scheduleSearchFragment("");
+    } else if (target && target.matches("h1, h2, h3, h4, h5, h6")) {
+      if (new URL(window.location.href).searchParams.get("h")) scheduleSearchFragment(hash);
+      else scheduleTocHeadingSync(hash, null, "instant");
+    } else highlightCurrentHash();
+  }
+
+  document.addEventListener("click", handleHashLinkClick, true);
+  document.addEventListener(HASH_LAYOUT_SETTLED_EVENT, realignHashAfterLayout);
+  window.addEventListener("hashchange", function () {
+    // Material's scrollspy can expose an intermediate heading hash while our
+    // distance-aware TOC animation is still in flight. Keep the animation
+    // token alive; its settle pass restores the link the reader selected.
+    if (Date.now() < tocSelectionGuardUntil) return;
+    cancelHeadingScroll();
+    cancelTocHeadingSync();
+    cancelSearchNavigation();
+    tocSelectionGuardUntil = 0;
+    // Apply the same exact-target hand-off as clicks and instant-page swaps.
+    // The selected TOC entry remains explicit only until reader motion resumes.
+    var target = meaningfulTarget(findTarget(window.location.hash));
+    if (target && target.matches("h1, h2, h3, h4, h5, h6")) {
+      scheduleTocHeadingSync(window.location.hash, null, "instant");
+    } else {
+      headingNavigationTarget = null;
+      highlight(window.location.hash, { scroll: false });
+    }
+  });
+  window.addEventListener("popstate", function () {
+    // History navigation is an explicit reader action, so it must always win
+    // over an in-flight TOC animation even during the short guard window.
+    cancelHeadingScroll();
+    cancelTocHeadingSync();
+    cancelSearchNavigation();
+    tocSelectionGuardUntil = 0;
+    headingNavigationTarget = null;
+    pendingPageFragment = null;
+  });
+  window.addEventListener("scroll", function () {
+    if (Date.now() < tocSelectionGuardUntil) return;
+    window.clearTimeout(tocSelectionClearTimer);
+    tocSelectionClearTimer = window.setTimeout(function () {
+      headingNavigationTarget = null;
+      clearTocSelection();
+    }, 80);
+  }, { passive: true });
+  window.addEventListener("scrollend", function () {
+    if (Date.now() < tocSelectionGuardUntil) return;
+    headingNavigationTarget = null;
+    clearTocSelection();
+  }, { passive: true });
+  function yieldTocMotionToUser(event) {
+    if (
+      event.type === "keydown"
+      && !["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)
+    ) return;
+    cancelHeadingScroll();
+    cancelTocHeadingSync();
+    cancelSearchNavigation();
+    tocSelectionGuardUntil = 0;
+    headingNavigationTarget = null;
+    pendingPageFragment = null;
+    clearTocSelection();
+  }
+  document.addEventListener("focusin", function (event) {
+    if (event.target.closest && event.target.closest("[data-md-component='search']")) yieldTocMotionToUser(event);
+  });
+  window.addEventListener("wheel", yieldTocMotionToUser, { passive: true });
+  window.addEventListener("touchstart", yieldTocMotionToUser, { passive: true });
+  window.addEventListener("pointerdown", yieldTocMotionToUser, { passive: true });
+  document.addEventListener("keydown", yieldTocMotionToUser);
+
+  // MkDocs Material instant navigation support.
+  if (window.document$ && typeof window.document$.subscribe === "function") {
+    window.document$.subscribe(run);
+  } else {
+    document.addEventListener("DOMContentLoaded", run);
+  }
+})();

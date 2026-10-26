@@ -1,0 +1,179 @@
+# ==============================================================================
+# MKDOCS 项目核心配置文件 (mkdocs.yml)
+# ==============================================================================
+# 适用场景：学术文档、个人知识库、技术博客
+# 核心功能：中文搜索优化、LaTeX 公式支持、Mermaid 图表、Obsidian 风格 Callouts
+# 兼容环境：Python 3.8+, Spyder 编辑器, GitHub Pages 部署
+# ==============================================================================
+
+# --- 1. 基础项目信息 (Project Information) ---
+site_name: "Chen Jing (经宸) | Zhejiang University"  # 网站标题，将显示在浏览器标签页
+site_url: https://edwinjing.github.io/  # 生产环境的域名，用于生成 SEO 规范链接 (Canonical URL) [13]
+site_author: "Chen Jing (经宸)"
+site_description: "Personal academic homepage of Chen Jing (经宸), a Mechanical Engineering undergraduate at Zhejiang University, working on embodied AI and robot learning."
+exclude_docs: |
+  research/
+copyright: >-
+  <span class="footer-copyright">Copyright 2025-2026 Chen Jing.</span>
+  <span class="site-status"><span class="site-status__dot" aria-hidden="true"></span>Syncing Knowledge Garden</span>
+  <span class="footer-license">Content licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a></span>
+
+# --- 2. 代码仓库链接 (Repository) ---
+# 配置后，页面右上角会出现 GitHub 图标，方便快速跳转到源码或编辑页面 [13]
+repo_name: "SPIRAL-EDWIN"
+repo_url: https://github.com/SPIRAL-EDWIN
+
+# --- 3. 主题配置 (Theme Configuration) ---
+theme:
+  name: material
+  custom_dir: overrides
+  language: zh # 强制界面语言为简体中文 (如“上一页”、“目录”等 UI 文本) [14]
+  # Keep a traditional root-level ICO for crawlers such as Bing. Modern
+  # browsers receive explicit PNG sizes from overrides/main.html as well.
+  favicon: favicon.ico
+
+  # 图标设置 (Icon)
+  icon:
+    logo: material/book-education-outline # 网站左上角 Logo，使用 Material Design 内置图标
+    repo: fontawesome/brands/github       # 右上角仓库图标
+    top: octicons/arrow-up-24
+    admonition:                           # 自定义 Callout 图标映射 [15]
+      note: octicons/tag-16
+      abstract: octicons/checklist-16
+      info: octicons/info-16
+      tip: octicons/squirrel-16
+      success: octicons/check-16
+      question: octicons/question-16
+      warning: octicons/alert-16
+      failure: octicons/x-circle-16
+      danger: octicons/zap-16
+      bug: octicons/bug-16
+      example: octicons/beaker-16
+      quote: octicons/quote-16
+
+  # 功能特性开关 (Feature Flags) [1, 16]
+  features:
+    - announce.dismiss #呈现可标记为由用户读取的临时公告，可以包含一个用于取消当前公告的按钮
+    - navigation.tabs          # 启用顶部导航栏标签页模式 (适合大型文档)
+    - navigation.tabs.sticky   # 标签页在滚动时吸顶固定
+    - navigation.sections      # 侧边栏自动分组
+    - navigation.indexes       # 允许点击文件夹名称直接跳转到该文件夹下的index.md
+    - navigation.top           # 添加“回到顶部”按钮
+    - toc.follow               # 右侧目录随内容滚动高亮
+    - content.code.copy        # 代码块添加“一键复制”按钮 [17]
+
+  # 色彩方案 (Palette) - 支持明暗模式切换
+  palette:
+    # 亮色模式配置
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom           # 主色调 (顶部导航栏颜色)
+      accent: custom           # 强调色 (链接、按钮颜色)
+      toggle:
+        icon: material/weather-night
+        name: 切换至深色模式
+
+    # 暗色模式配置
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: 切换至浅色模式
+
+  # 字体由 edwinos.css 的本地 WOFF2 @font-face 管理，避免访问 Google Fonts。
+  font: false
+
+# --- 4. 插件系统 (Plugins) ---
+plugins:
+  # Obsidian Callouts 转换插件
+  # 将 Obsidian 风格的 > [!NOTE] 转换为 MkDocs 的 admonition 格式
+  - callouts
+
+  # Obsidian 风格链接支持 (![[image.png]] 和 [[page]])
+  - roamlinks
+
+  # 图片灯箱插件：点击图片可放大查看 [11, 18]
+  # 安装：pip install mkdocs-glightbox
+  - glightbox:
+      touchNavigation: true
+      loop: false
+      effect: zoom
+      width: 100%
+      height: auto
+      zoomable: true
+
+# 首页结构化内容位于 docs 外，也需触发本地预览重建。
+watch:
+  - data/homepage
+
+# 构建时渲染 Overview 数据，并生成固定的 Friends 数字。
+hooks:
+  - hooks/home_sections.py
+  - hooks/homepage.py
+
+extra:
+  generator: false
+
+# --- 5. Markdown 扩展 (Markdown Extensions) ---
+markdown_extensions:
+  # 5.1 Admonitions (Callouts) - 深度复刻 Obsidian 体验 [15, 9]
+  - admonition
+  - pymdownx.details            # 允许折叠 Callouts (例如 > [!INFO]- 语法)
+  - pymdownx.superfences:       # 允许在 Callouts 中嵌套代码块和图表
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+  # 5.2 数学公式支持 (MathJax) [7, 12, 20]
+  - pymdownx.arithmatex:
+      generic: true             # 开启通用模式，配合 extra_javascript 中的配置
+
+  # 5.3 格式与排版增强
+  - attr_list                   # 允许通过 {:.class } 语法添加 HTML 属性
+  - md_in_html                  # 允许在 HTML 标签中使用 Markdown 语法
+  - def_list                    # 定义列表支持
+  - pymdownx.tasklist:          # 任务列表 (Checkbox) 支持
+      custom_checkbox: true
+
+  - pymdownx.emoji:             # Emoji 表情支持
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - markdown.extensions.nl2br
+  - pymdownx.magiclink   #自动识别URL
+  - pymdownx.mark         # 支持 ==高亮== 荧光笔语法
+
+  # 5.4 代码高亮 [21]
+  - pymdownx.highlight:
+      anchor_linenums: true     # 代码行号可点击锚定
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite       # 行内代码高亮
+  - pymdownx.snippets           # 允许嵌入外部代码文件
+
+  # 5.5 内容选项卡 [22]
+  - pymdownx.tabbed:
+      alternate_style: true
+
+  # 5.6 目录生成优化 [23]
+  - toc:
+      permalink: false          # 保留标题锚点，不生成标题旁的 ¶ 链接
+      baselevel: 1              # 即使 markdown 从 H1 开始，也正确解析
+      title: Contents           # 仅覆盖右侧目录标题，不改变全站中文界面
+
+# --- 6. 额外脚本与样式 (Extra Scripts & CSS) ---
+extra_javascript:
+  # MathJax 3 配置：实现 LaTeX 公式的浏览器端渲染
+  # 必须在 docs/javascripts/ 目录下创建 mathjax.js 文件 (内容见报告正文)
+  - javascripts/mathjax.js?v=20261011b
+  - javascripts/block-links.js?v=20261027a  # Obsidian 风格块引用链接支持
+  - javascripts/ui-perf.js?v=20261027a
+
+extra_css:
+  - stylesheets/edwinos.css?v=20261027a  # Unified EdwinOS cascade
+
+# --- 7. Single academic homepage ---
+nav:
+  - Overview: index.md

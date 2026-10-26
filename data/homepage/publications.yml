@@ -1,0 +1,50 @@
+# Overview > Publications
+# Keep entries in the order you want them to appear on the page.
+# Upload local artwork to docs/assets/images/publications/ and set image below.
+# See README.md in this folder for a complete copy/paste template.
+
+settings:
+  self_author: "Chen Jing"
+  collapse_after: 7
+  author_notes:
+    "*": "Equal contribution"
+    "†": "Corresponding author"
+    "§": "Project lead"
+
+entries:
+  - id: "bipedal-wbc"
+    title: "Learning Holistic Whole-Body Loco-Manipulation with a Bipedal Mobile Manipulator"
+    image: "assets/images/publications/bipedal-wbc.webp"
+    image_alt: "BipedalWBC manipulation tasks and learning/deployment framework"
+    authors:
+      - name: "Zhongyu Chen"
+        marks: "*"
+      - name: "Yuxuan Nai"
+        marks: "*"
+      - name: "Qian Chen"
+      - name: "Yidong Zhu"
+      - name: "Chen Jing"
+        self: true
+      - name: "Qihan Wang"
+      - name: "Xudong Li"
+      - name: "Zhizhan Li"
+      - name: "Leixin Chang"
+      - name: "Liangjing Yang"
+      - name: "Hua Chen"
+        marks: "†"
+    venue:
+      name: "Under Review"
+      year: ""
+      status: ""
+      rank: ""
+    award: ""
+    lead: false
+    links:
+      - label: "Project Page"
+        url: "https://wholebodyrobotics.github.io/BipedalWBC/"
+      - label: "Paper"
+        url: "https://arxiv.org/pdf/2609.18930"
+      - label: "arXiv"
+        url: "https://arxiv.org/abs/2609.18930"
+      - label: "Video"
+        url: "https://www.youtube.com/watch?v=UVUo_AUcGBI"

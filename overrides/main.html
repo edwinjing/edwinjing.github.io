@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% set edwinos_notes_footer = page and page.file and (page.file.src_uri.startswith("OsdNotes/") or page.file.src_uri.startswith("经验分享/")) %}
+
+{% block htmltitle %}
+  {% if page.url == "" %}
+    <title>{{ config.site_name }}</title>
+  {% else %}
+    {{ super() }}
+  {% endif %}
+{% endblock %}
+
+{% block extrahead %}
+  <script>
+    (function () {
+      var html = document.documentElement;
+      html.classList.replace('no-js', 'js');
+      if (window.IntersectionObserver && typeof Element.prototype.animate === 'function' &&
+          !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        html.classList.add('edwinos-hub-reveal-enabled');
+        // Fail open if the main runtime cannot load or initialize. No-JS and
+        // reduced-motion readers never receive the pre-paint opacity gate.
+        window.__edwinosHubRevealBootTimer = window.setTimeout(function () {
+          html.classList.remove('edwinos-hub-reveal-enabled');
+        }, 4000);
+      }
+    })();
+  </script>
+  {% include "partials/image-previews.html" %}
+  {% if page.url in ["", "index.html"] %}
+  {% for image in page.edwinos_home_image_preloads | default([]) %}
+  <link rel="preload" as="image" href="{{ image.src | url }}"{% if image.srcset %} imagesrcset="{{ image.srcset }}"{% endif %}{% if image.sizes %} imagesizes="{{ image.sizes }}"{% endif %} fetchpriority="auto">
+  {% endfor %}
+  {% endif %}
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ 'assets/favicon-32x32.png' | url }}">
+  <link rel="icon" type="image/png" sizes="96x96" href="{{ 'assets/favicon-96x96.png' | url }}">
+  <link rel="shortcut icon" type="image/x-icon" href="{{ 'favicon.ico' | url }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ 'assets/apple-touch-icon.png' | url }}">
+  <link rel="preload" href="{{ 'assets/fonts/caveat/caveat-latin.woff2' | url }}" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="{{ 'assets/fonts/source-serif-4/source-serif-4-latin.woff2' | url }}" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="{{ 'assets/fonts/jetbrains-mono/jetbrains-mono-latin.woff2' | url }}" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="{{ 'assets/fonts/inter/inter-latin.woff2' | url }}" as="font" type="font/woff2" crossorigin>
+  {% if page.url in ["", "HOME/Archive/", "HOME/friends/", "OsdNotes/", "经验分享/", "%E7%BB%8F%E9%AA%8C%E5%88%86%E4%BA%AB/"] %}
+  <link rel="preload" href="{{ 'assets/fonts/outfit/outfit-latin.woff2' | url }}" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="{{ 'assets/fonts/noto-sans-sc/noto-sans-sc-overview.woff2' | url }}" as="font" type="font/woff2" crossorigin>
+  {% endif %}
+  {% if page and 'class="arithmatex' in page.content %}
+  <link rel="preload" href="{{ 'javascripts/vendor/mathjax/3.2.2/es5/tex-mml-chtml.js' | url }}" as="script">
+  {% endif %}
+  {% if page.url == "" %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://edwinjing.github.io/#website",
+        "url": "https://edwinjing.github.io/",
+        "name": "Chen Jing (经宸)",
+        "alternateName": ["Jing Chen", "Edwin Jing"]
+      },
+      {
+        "@type": "ProfilePage",
+        "@id": "https://edwinjing.github.io/#profile",
+        "url": "https://edwinjing.github.io/",
+        "name": "Chen Jing (经宸) | Zhejiang University",
+        "isPartOf": { "@id": "https://edwinjing.github.io/#website" },
+        "mainEntity": { "@id": "https://edwinjing.github.io/#person" }
+      },
+      {
+        "@type": "Person",
+        "@id": "https://edwinjing.github.io/#person",
+        "name": "Chen Jing",
+        "alternateName": ["经宸", "Jing Chen", "Edwin Jing"],
+        "url": "https://edwinjing.github.io/",
+        "affiliation": {
+          "@type": "CollegeOrUniversity",
+          "name": "Zhejiang University"
+        },
+        "memberOf": {
+          "@type": "Organization",
+          "name": "ZJU-UIUC Institute"
+        },
+        "email": "mailto:3250110636@zju.edu.cn",
+        "knowsAbout": [
+          "Embodied AI",
+          "Legged Locomotion",
+          "Whole-body Loco-manipulation",
+          "Sim2Real",
+          "Robotics"
+        ],
+        "sameAs": [
+          "https://github.com/SPIRAL-EDWIN",
+          "https://www.linkedin.com/in/chen-jing-31a16a421/",
+          "https://www.youtube.com/@EdwinJing",
+          "https://x.com/EdwinJing661",
+          "https://scholar.google.com/citations?user=vgoqJdAAAAAJ&hl=zh-CN"
+        ]
+      }
+    ]
+  }
+  </script>
+  {% endif %}
+  {{ super() }}
+{% endblock %}
+
+{% block header %}
+  {# Classify the initial document before the header can paint. ui-perf.js
+     remains the route owner after Material replaces a document. #}
+  <script>document.body.classList.toggle("is-homepage", {{ (page.url in ["", "index.html"]) | tojson }});document.body.classList.toggle("is-home-profile-page", {{ (page.url in ["HOME/Archive/", "HOME/friends/", "HOME/Archive/index.html", "HOME/friends/index.html"]) | tojson }});</script>
+  {{ super() }}
+{% endblock %}
+
+{% block content %}
+  {{ super() }}
+  {% if edwinos_notes_footer %}
+    {% include "partials/notes-footer.html" %}
+  {% endif %}
+{% endblock %}
+
+{% block footer %}
+  {% if page.url not in ["", "index.html"] and not edwinos_notes_footer %}
+    {{ super() }}
+  {% endif %}
+{% endblock %}

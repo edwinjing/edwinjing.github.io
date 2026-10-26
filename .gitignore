@@ -1,0 +1,39 @@
+site/
+.venv/
+__pycache__/
+nul
+~/
+.sisyphus/
+.codex/staging/
+
+# PHIL 206 课程资料暂未获得公开分享授权，仅保留本地副本
+/course-materials/PHIL/PHIL 206/
+
+# 操作系统生成的垃圾文件（跨平台）
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local verification evidence / scratch builds
+site-*/
+implementation/*review/*.png
+implementation/*.log
+
+# Local migration evidence and inherited workspace utilities, not site source
+/implementation/
+/STATE.md
+/TODO.md
+/.codex/
+/.tools/
+/.vscode/
+/UI_MAINTENANCE.md
+/VSCode_MkDocs_Tutorial.md
+/WINDOWS_AGENT_README.md
+/hooks/*
+!/hooks/home_sections.py
+!/hooks/homepage.py
+/tools/*
+!/tools/test_homepage_build.py
+!/tools/test_homepage_loading.py
+!/tools/test_glightbox_compatibility.py
+!/tools/generate_loading_previews.py
