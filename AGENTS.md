@@ -8,6 +8,46 @@ routes and search are not published here. The homepage's custom chapter header
 is owned by `header.html`, the Header section of `edwinos.css`, and
 `setupAcademicHeader` in `ui-perf.js`. `block-links.js` excludes the seven chapter
 IDs so whole sections are never highlighted as note fragments.
+The header name is static/unselectable. `setupAcademicWheelScroll` owns
+homepage wheel damping; preserve native touch/reduced-motion behavior and its
+explicit cancellation before chapter navigation and menu opening. Its time
+constant is 60ms: Edwin tried ZJU's stronger setting and chose the lighter one.
+Compact-menu opening translates down 14px and fades in over 280ms. Move the
+panel and sibling selected glass together, preserving geometry during rail
+scrolls. Fade the individual surfaces/labels, not a backdrop-isolating parent.
+Reduced motion skips the entrance; close/resize/navigation must cancel its RAF.
+Compact navigation uses two visual levels: a persistent refractive outer tray
+and a neutral gray selected fill below the labels. Only while the selected
+capsule moves does the gray fade into the existing above-label optical lens;
+restore gray and zero lens opacity/strength at rest. The fill and lens share
+the same measured rectangle. Keep the decoded displacement map frozen during
+motion; no new glass library, duplicate labels, or per-frame map rebuilds.
+Desktop navigation retains its current optics.
+Automatic chapter selection uses a reading line at 30% of the usable viewport
+below the header + 12px gap. A heading must be fully visible and cross that
+line before it can claim selection; choose the last qualifying heading in
+document order. Use a 12px return margin to avoid boundary flicker. Keep the
+long section's body context when its title has passed above the viewport;
+seeing the next title near the bottom is insufficient. At document end the
+fully visible final heading may win even if it cannot reach the reading line.
+Details toggle and header/font/window/visual-viewport layout changes recompute
+selection. Header owns the toggle listener independently of the reveal runtime.
+Keep explicit chapter destinations selected at their clamped landing until
+reader scrolling resumes. Chapter clicks/keyboard activation scroll directly
+without pushState or hash changes, preserving history length. Legacy chapter
+fragments still land correctly, then replaceState removes their hash without
+adding an entry. Preserve Back to Top, query strings and normal browser Back.
+Chapter navigation calls the existing Overview reveal owner's target arrival
+API with the explicit ID; it must not depend on location.hash for new clicks.
+
+Homepage text-selection policy (2026-10-27): all seven section headings,
+Publication author rows (short and expanded), Publication venue/status rows,
+and Workshop status/description and location/date rows use scoped
+`user-select: none` and `-webkit-user-select: none`. Keep these rules in their
+existing CSS component owners and target semantic classes, not literal text.
+New entries and replacement conference names inherit the policy automatically.
+Do not disable author links or author-list controls. Other body prose and paper
+titles remain selectable. This policy applies only to this homepage checkout.
 
 Local review uses 127.0.0.1:8000. Do not push or publish without explicit approval.
 Update STATE.md and TODO.md after implementation/verification milestones.

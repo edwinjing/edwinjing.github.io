@@ -6,9 +6,10 @@
     <div class="edwinos-header-glass__fade"></div>
   </div>
   <nav class="md-header__inner md-grid" aria-label="Academic homepage">
-    <a class="academic-header-name" href="{{ '/' | url }}#about">Chen Jing (经宸)</a>
+    <span class="academic-header-name">Chen Jing (经宸)</span>
     <div id="academic-chapters" class="academic-header-panel">
       <div class="academic-header-panel-surface" aria-hidden="true"></div>
+      <div class="academic-menu-selection-track" aria-hidden="true"><span class="academic-menu-selection"></span></div>
       <nav class="md-tabs" aria-label="Homepage sections">
         <div class="md-grid"><ul class="md-tabs__list">
         {% for id, label in [('about', 'About'), ('news', 'News'), ('education', 'Education'), ('experience', 'Experience'), ('publications', 'Publications'), ('workshops', 'Workshops'), ('honors', 'Honors')] %}
@@ -46,7 +47,8 @@
         else if(s.right>r.right)rail.scrollLeft+=s.right-r.right+8;
       }
       var h=header.getBoundingClientRect(), t=tabs.getBoundingClientRect(), b=selected.getBoundingClientRect();
-      track.style.cssText='left:'+(t.left-h.left)+'px;top:'+(t.top-h.top)+'px;width:'+t.width+'px;height:'+t.height+'px';
+      var menuY=header.dataset.compact==='true' ? parseFloat(header.style.getPropertyValue('--academic-menu-y'))||0 : 0;
+      track.style.cssText='left:'+(t.left-h.left)+'px;top:'+(t.top-h.top-menuY)+'px;width:'+t.width+'px;height:'+t.height+'px';
       return {selected:true,key:selected.href,x:b.left-t.left+1,y:b.top-t.top,width:Math.max(0,b.width-2),height:b.height};
     };
     (function(){

@@ -1279,6 +1279,10 @@ body.is-homepage .academic-home-layout .academic-content {
 }
 
 /* Overview section titles: base layout, final typeface, then route density. */
+.academic-home-layout .academic-section > .section-title {
+    -webkit-user-select: none;
+    user-select: none;
+}
 .section-title {
     display: flex;
     align-items: center;
@@ -4134,12 +4138,16 @@ body .md-progress {
 [data-md-color-scheme="default"] .edwinos-academic-header :is(.academic-header-name,.academic-header-github,.academic-header-menu) { color: #1f2328 !important; }
 [data-md-color-scheme="slate"] .edwinos-academic-header :is(.academic-header-name,.academic-header-github,.academic-header-menu) { color: #f0f6fc !important; }
 .edwinos-academic-header .academic-header-name {
+    -webkit-user-select: none;
+    user-select: none;
+    cursor: default;
     position: relative; z-index: 24; flex: 0 0 auto;
     font-family: var(--edwinos-font-reading-sans); font-size: 14.5px;
     font-weight: 500; white-space: nowrap; color: inherit;
 }
 .edwinos-academic-header .academic-header-panel { flex: 1 1 auto; min-width: 0; height: 100%; position: relative; }
 .edwinos-academic-header .academic-header-panel-surface { display: none; }
+.edwinos-academic-header .academic-menu-selection-track { display: none; }
 .edwinos-academic-header .md-tabs,
 .edwinos-academic-header .md-tabs[data-md-state] {
     position: relative !important; inset: auto !important; width: 100% !important;
@@ -4171,18 +4179,42 @@ body .md-progress {
 .edwinos-academic-header[data-compact="true"] .academic-header-menu { display: inline-flex; }
 .edwinos-academic-header[data-compact="true"] .academic-header-panel {
     position: absolute; top: calc(100% - 4px); left: 8px; right: 8px;
-    height: 58px; padding: 10px 8px; border-radius: 24px; z-index: 21;
+    height: 58px; padding: 10px 8px; border-radius: 29px; z-index: 21;
     visibility: hidden; pointer-events: none;
+    transform: translateY(var(--academic-menu-y, 0px));
 }
+.edwinos-academic-header[data-compact="true"] .edwinos-tab-glass-track {
+    transform: translateY(var(--academic-menu-y, 0px));
+}
+.edwinos-academic-header[data-compact="true"] :is(.academic-header-panel-surface, .md-tabs) {
+    opacity: var(--academic-menu-opacity, 1);
+}
+.edwinos-academic-header[data-compact="true"] .academic-menu-selection-track {
+    display: block; position: absolute; inset: 10px 8px; z-index: 1;
+    overflow: hidden; pointer-events: none; border-radius: 19px;
+}
+.edwinos-academic-header[data-compact="true"] .academic-menu-selection {
+    display: block; position: absolute; border-radius: 999px;
+    left: var(--academic-selection-x, 0px); top: var(--academic-selection-y, 0px);
+    width: var(--academic-selection-width, 0px); height: var(--academic-selection-height, 36px);
+    background: #e6e8eb;
+    opacity: calc(var(--academic-menu-opacity, 1) * (1 - var(--academic-selection-glass, 0)));
+}
+[data-md-color-scheme="slate"] .edwinos-academic-header .academic-menu-selection { background: #30353c; }
+.edwinos-academic-header[data-compact="true"] .md-tabs { z-index: 2; }
+.edwinos-academic-header[data-compact="true"] .edwinos-tab-glass {
+    opacity: calc(var(--academic-menu-opacity, 1) * var(--academic-selection-glass, 0));
+}
+.edwinos-academic-header[data-compact="true"] .md-tabs__link[aria-current="location"] { color: var(--md-default-fg-color) !important; }
 .edwinos-academic-header[data-compact="true"]:not([data-menu-open="true"]) .academic-header-panel .md-tabs { visibility: hidden !important; pointer-events: none !important; }
 .edwinos-academic-header[data-compact="true"][data-menu-open="true"] .academic-header-panel { visibility: visible; pointer-events: auto; }
 .edwinos-academic-header[data-compact="true"] .academic-header-panel-surface {
-    display: block; position: absolute; inset: 0; border-radius: inherit;
-    border: 1px solid rgba(100,110,125,.16); background: rgba(246,248,250,.35);
+    display: block; position: absolute; inset: 0; border-radius: inherit; z-index: 0;
+    border: 1px solid rgba(100,110,125,.16); background: rgba(246,248,250,.5);
     box-shadow: 0 8px 24px rgba(31,35,40,.08), inset 0 1px 0 rgba(255,255,255,.45);
-    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
 }
-[data-md-color-scheme="slate"] .edwinos-academic-header .academic-header-panel-surface { background: rgba(13,17,23,.4); border-color: rgba(210,220,232,.16); }
+[data-md-color-scheme="slate"] .edwinos-academic-header .academic-header-panel-surface { background: rgba(22,27,34,.48); border-color: rgba(210,220,232,.16); }
 .edwinos-academic-header .academic-header-panel-surface.edwinos-chapter-panel-refraction { backdrop-filter: url(#edwinos-chapter-panel-refraction); }
 .edwinos-academic-header[data-compact="true"] .md-tabs .md-grid { justify-content: flex-start !important; overscroll-behavior-inline: contain; touch-action: pan-x; }
 .edwinos-academic-header[data-compact="true"] .md-tabs__link { height: 36px !important; }
@@ -7391,6 +7423,8 @@ body:has(.academic-home-layout) .news-text {
 
 body.is-homepage .academic-home-layout .overview-publication__authors,
 body.is-homepage .academic-home-layout .overview-publication__authors-full {
+    -webkit-user-select: none;
+    user-select: none;
     margin: 3px 0 0 !important;
     color: var(--academic-muted) !important;
     font-family: var(--edwinos-font-reading-sans) !important;
@@ -7464,6 +7498,8 @@ body.is-homepage .academic-home-layout .overview-publication__authors-full {
 }
 
 .academic-home-layout .overview-publication__venue {
+    -webkit-user-select: none;
+    user-select: none;
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
@@ -7740,6 +7776,8 @@ body.is-homepage .academic-home-layout .overview-workshop__event a:hover {
 }
 
 body.is-homepage .academic-home-layout .overview-workshop__status {
+    -webkit-user-select: none;
+    user-select: none;
     margin: 6px 0 0 !important;
     color: var(--academic-ink) !important;
     font-family: var(--edwinos-font-reading-sans) !important;
@@ -7749,6 +7787,8 @@ body.is-homepage .academic-home-layout .overview-workshop__status {
 }
 
 body.is-homepage .academic-home-layout .overview-workshop__meta {
+    -webkit-user-select: none;
+    user-select: none;
     margin: 4px 0 0 !important;
     color: var(--academic-muted) !important;
     font-family: var(--edwinos-font-reading-sans) !important;

@@ -9,6 +9,53 @@ selected glass; it reuses the original optical primitives. The native body
 reveal, media and footer owners are unchanged. `block-links.js` yields the seven
 chapter IDs, preserving its other body-fragment behavior.
 
+The header name is static, non-focusable text with scoped `user-select: none`;
+only explicit chapter links navigate. `setupAcademicWheelScroll` in `ui-perf.js`
+owns homepage-only wheel damping (60ms exponential time constant,
+restored after Edwin tried the stronger ZJU setting), using native
+document scroll positions. It yields to chapter navigation, history, keyboard,
+pointer/touch input, native nested scrollers and reduced motion. It never
+transforms the content, changes wheel distance, or keeps an idle animation loop.
+The chapter header explicitly cancels it before opening the menu or navigating.
+
+The compact panel enters downward from -14px over 280ms. Header-owned CSS
+variables synchronize panel translation and sibling capsule translation;
+the geometry helper subtracts that offset so intermediate rail/layout updates
+cannot apply it twice. Opacity belongs to the panel surface, labels and capsule,
+not their common parent, preserving page backdrop sampling. Reduced motion
+opens directly. Closing cancels the entrance frame and clears its variables.
+
+Compact selection follows the Apple Music reference: the outer tray remains
+liquid glass; `.academic-menu-selection` is a neutral gray fill below labels
+at rest. `selectionStrength` crossfades that fill with the sibling selected
+lens and drives the existing optical strength during movement. Both use the
+same `paint()` rectangle, and the optical map is frozen until movement ends.
+Resting lens opacity is zero, eliminating its old bracket-like edge highlights.
+The outer tray uses a full 29px capsule radius and a quieter 16px/8px blur blend.
+Desktop selected glass is unchanged. No Apple-private shader code is claimed.
+
+Scrollspy uses a reading line at 30% of the usable visual viewport below the
+header plus the 12px landing gap. Select the last fully visible heading whose
+top has crossed this line, with a 12px return margin. A title near the bottom
+cannot displace the long section being read. Clipped headings are excluded;
+body context remains available after its own heading has fully passed above.
+At document end, a fully visible final heading can become active even when it
+cannot reach the line. Header-owned Details toggle, header/font/window layout,
+and visual viewport events recompute the spy with lifecycle cleanup. Explicit
+click/history selection persists at its clamped landing until reader input or
+position changes. Neither automatic selection nor chapter clicks add hashes
+or history entries. Explicit chapter navigation calls `revealTarget(id)` on
+the existing Overview reveal owner before measuring the destination. Legacy
+chapter hashes remain valid landing inputs and are removed with replaceState;
+query strings and unrelated body fragments are preserved until a chapter is
+explicitly chosen. Browser Back traverses pages rather than chapter clicks.
+
+Text selection is disabled in the existing owners for the seven section titles,
+Publication authors (including expanded authors), Publication venue/status,
+and Workshop description/status plus location/date. Selectors use semantic
+classes so future content inherits the policy. Keep links and disclosure
+controls interactive and leave ordinary prose and paper titles selectable.
+
 ---
 
 # EdwinOS UI Architecture

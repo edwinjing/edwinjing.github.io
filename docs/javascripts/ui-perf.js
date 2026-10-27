@@ -744,6 +744,75 @@
      but never our surface. The template's first-paint geometry is also the
      only positioning/reveal routine used here. Search width stays with its
      existing owner. Animation work stops completely at its endpoint. */
+  /* Academic wheel smoothing keeps native document geometry and scroll events.
+     The ZJU reference uses Lenis' exponential approach with a ~167ms time
+     constant. This site's reviewed lighter setting is 60ms; no idle RAF loop.
+     Touch, nested scrollers and reduced motion remain browser-owned. */
+  var academicWheelRuntime = null;
+  function stopAcademicWheelScroll() {
+    if (academicWheelRuntime) academicWheelRuntime.stop();
+  }
+  function setupAcademicWheelScroll() {
+    if (academicWheelRuntime) { academicWheelRuntime.destroy(); academicWheelRuntime = null; }
+    var header = document.querySelector('[data-academic-header]');
+    if (!header || !document.querySelector('.academic-home-layout')) return;
+    var reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+    var timeConstant = 60; // Milliseconds: restore the lighter reviewed buffer.
+    var frame = 0, position = 0, target = 0, expected = 0, lastTime = 0;
+    function stop() { cancelAnimationFrame(frame); frame = 0; }
+    function limit() { return Math.max(0, document.documentElement.scrollHeight - innerHeight); }
+    function tick(now) {
+      // Yield to native restoration, focus, scrollbars or another scroll owner.
+      if (reduced.matches || header.dataset.menuOpen === 'true' || Math.abs(scrollY - expected) > 2) { stop(); return; }
+      target = Math.max(0, Math.min(limit(), target));
+      var elapsed = Math.min(64, Math.max(0, now - lastTime)); lastTime = now;
+      position += (target - position) * (1 - Math.exp(-elapsed / timeConstant));
+      var settled = Math.abs(target - position) < .5;
+      if (settled) position = target;
+      window.scrollTo({ top: position, behavior: 'instant' }); expected = scrollY;
+      frame = settled ? 0 : requestAnimationFrame(tick);
+    }
+    function nativeRegion(event) {
+      var path = event.composedPath ? event.composedPath() : [];
+      for (var i = 0; i < path.length; i += 1) {
+        var node = path[i];
+        if (node === document.body || node === document.documentElement) break;
+        if (!(node instanceof Element)) continue;
+        if (node.matches('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [data-native-scroll], .academic-header-panel, .glightbox-container')) return true;
+        if (node.scrollHeight > node.clientHeight + 1 && /auto|scroll|overlay/.test(getComputedStyle(node).overflowY)) return true;
+      }
+      return false;
+    }
+    function onWheel(event) {
+      if (event.defaultPrevented || !event.cancelable || reduced.matches ||
+          event.ctrlKey || event.metaKey || event.altKey || event.shiftKey ||
+          Math.abs(event.deltaX) >= Math.abs(event.deltaY) ||
+          header.dataset.menuOpen === 'true' || nativeRegion(event)) { stop(); return; }
+      var delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? innerHeight : 1);
+      if (!Number.isFinite(delta) || !delta) return;
+      if (frame && Math.abs(scrollY - expected) > 2) stop();
+      if (!frame) { position = target = expected = scrollY; lastTime = performance.now(); }
+      // Reversing direction discards the remaining tail immediately.
+      if ((target - position) * delta < 0) target = position;
+      target = Math.max(0, Math.min(limit(), target + delta));
+      event.preventDefault(); // Do not stop propagation: reveal still sees reader intent.
+      if (!frame) frame = requestAnimationFrame(tick);
+    }
+    var cancelEvents = ['pointerdown', 'touchstart', 'keydown', 'click', 'hashchange', 'popstate', 'pagehide', 'resize'];
+    cancelEvents.forEach(function (event) { window.addEventListener(event, stop, { capture: true, passive: true }); });
+    document.addEventListener('visibilitychange', stop);
+    window.addEventListener('wheel', onWheel, { passive: false });
+    reduced.addEventListener('change', stop);
+    academicWheelRuntime = {
+      stop: stop,
+      destroy: function () {
+        stop(); window.removeEventListener('wheel', onWheel);
+        cancelEvents.forEach(function (event) { window.removeEventListener(event, stop, true); });
+        document.removeEventListener('visibilitychange', stop); reduced.removeEventListener('change', stop);
+      }
+    };
+  }
+
   /* Academic header owns only its explicit chapter links. Body fragments keep
      block-links.js as their owner; a window capture handler prevents competing
      Material/document handlers from starting a second scroll animation. */
@@ -772,15 +841,23 @@
     var panelOptics = null, panelFrame = 0;
     var frame = 0, scrollFrame = 0, layoutFrame = 0, spyFrame = 0, historyFrame = 0;
     var sequence = 0, menuEpoch = 0, disposed = false, readerIntervened = false;
-    var active = 'about', current = null, targets = [];
+    var active = 'about', current = null, targets = [], profileDetails = null, explicitLanding = null;
     var resize = typeof ResizeObserver === 'function' ? new ResizeObserver(scheduleLayout) : null;
 
     function paint(box) {
       ['x', 'y', 'width', 'height'].forEach(function (key) {
         surface.style[key === 'x' ? 'left' : key === 'y' ? 'top' : key] = box[key] + 'px';
+        panel.style.setProperty('--academic-selection-' + key, box[key] + 'px');
       });
       current = box;
       if (optics.paint) optics.paint(box);
+    }
+    function selectionStrength(value) {
+      // A solid neutral selection sits below real labels at rest. During a
+      // move it dissolves into the existing above-label refractive lens.
+      panel.style.setProperty('--academic-selection-glass', String(value));
+      surface.style.setProperty('--academic-selection-glass', String(value));
+      optics.setStrength(value);
     }
     function setActive(id) {
       active = id; header.dataset.activeSection = id;
@@ -794,7 +871,7 @@
       optics.endMotion(false);
       var rendered = !surface.hidden && surface.getBoundingClientRect();
       var box = window.__edwinosTabGlassGeometry(header, '#' + active, reveal);
-      if (!box || !box.selected) { surface.hidden = true; if (complete) complete(); return; }
+      if (!box || !box.selected) { surface.hidden = true; selectionStrength(0); if (complete) complete(); return; }
       var wasHidden = surface.hidden; surface.hidden = false;
       var track = header.querySelector('.edwinos-tab-glass-track').getBoundingClientRect();
       var from = rendered ? { x: rendered.left - track.left, y: rendered.top - track.top,
@@ -802,25 +879,33 @@
       surface.dataset.edwinosTabSelected = box.key;
       surface.dataset.edwinosTabMoving = '0';
       if (!animate || reduced.matches || wasHidden || !from || !from.width) {
-        paint(box); optics.setStrength(0); optics.refresh(); if (complete) complete(); return;
+        paint(box); selectionStrength(0); optics.refresh(); if (complete) complete(); return;
       }
-      paint(from); optics.beginMotion(); surface.dataset.edwinosTabMoving = '1';
+      var startingStrength = parseFloat(surface.style.getPropertyValue('--academic-selection-glass')) || 0;
+      paint(from); optics.beginMotion(); selectionStrength(startingStrength); surface.dataset.edwinosTabMoving = '1';
       var started = performance.now();
       function tick(now) {
         if (disposed) return;
         var p = Math.min(1, (now - started) / 350), eased = 1 - Math.pow(1 - p, 3), next = {};
         ['x', 'y', 'width', 'height'].forEach(function (key) { next[key] = from[key] + (box[key] - from[key]) * eased; });
-        paint(next); optics.setStrength(Math.sin(Math.PI * p));
+        var carriedStrength = startingStrength * (1 - p);
+        paint(next); selectionStrength(carriedStrength + (1 - carriedStrength) * Math.sin(Math.PI * p));
         if (p < 1) frame = requestAnimationFrame(tick);
         else {
           frame = 0; paint(box); surface.dataset.edwinosTabMoving = '0';
-          optics.endMotion(false); optics.setStrength(0); optics.refresh();
+          optics.endMotion(false); selectionStrength(0); optics.refresh();
           if (complete) complete();
         }
       }
       frame = requestAnimationFrame(tick);
     }
     function menuOpen() { return header.dataset.menuOpen === 'true'; }
+    function panelEntrance(progress) {
+      // Translate panel and its sibling selected glass together. Fade each
+      // visible surface, never their parent: that would isolate backdrop blur.
+      header.style.setProperty('--academic-menu-y', (-14 * (1 - progress)) + 'px');
+      header.style.setProperty('--academic-menu-opacity', String(progress));
+    }
     function closeMenu(returnFocus) {
       menuEpoch += 1;
       header.dataset.menuOpen = 'false'; toggle.setAttribute('aria-expanded', 'false');
@@ -828,6 +913,8 @@
       panel.inert = header.dataset.compact === 'true';
       if (returnFocus) toggle.focus({ preventScroll: true });
       cancelAnimationFrame(panelFrame); panelFrame = 0;
+      header.style.removeProperty('--academic-menu-y');
+      header.style.removeProperty('--academic-menu-opacity');
       if (panelOptics) { panelOptics.destroy(); panelOptics = null; }
       if (header.dataset.compact === 'true') {
         surface.hidden = true;
@@ -836,20 +923,23 @@
       }
     }
     function openMenu() {
+      stopAcademicWheelScroll();
       menuEpoch += 1; header.dataset.menuOpen = 'true'; panel.inert = false;
       toggle.setAttribute('aria-expanded', 'true'); toggle.setAttribute('aria-label', 'Close section navigation');
       place(false, true);
       if (!panelOptics) panelOptics = setupLayoutControlGlass(panelSurface, {
         prefix: 'edwinos-chapter-panel', filterId: 'edwinos-chapter-panel-refraction',
         datasetMode: 'edwinosChapterPanelMode', datasetBuilds: 'edwinosChapterPanelMapBuilds',
-        blur: 14, edgeBlur: 2, blurTransition: 22, strength: reduced.matches ? 18 : 0, radius: 24
+        blur: 16, edgeBlur: 8, blurTransition: 14, strength: reduced.matches ? 12 : 0, radius: 29
       });
       if (!reduced.matches) {
+        panelEntrance(0);
         var epoch = menuEpoch, started = performance.now();
         function enter(now) {
           if (!menuOpen() || epoch !== menuEpoch || !panelOptics) return;
-          var p = Math.min(1, (now - started) / 180);
-          panelOptics.setStrength(18 * (1 - Math.pow(1 - p, 3)));
+          var p = Math.min(1, (now - started) / 280), eased = 1 - Math.pow(1 - p, 3);
+          panelEntrance(eased);
+          panelOptics.setStrength(12 * eased);
           if (p < 1) panelFrame = requestAnimationFrame(enter); else panelFrame = 0;
         }
         panelFrame = requestAnimationFrame(enter);
@@ -865,11 +955,16 @@
     function cancelScroll() {
       sequence += 1; cancelAnimationFrame(scrollFrame); scrollFrame = 0;
     }
-    function navigate(id, record, animate) {
+    function navigate(id, animate) {
       if (!links.some(function (link) { return link.dataset.academicSection === id; })) return;
+      stopAcademicWheelScroll();
       cancelScroll(); var ticket = sequence, epoch = menuEpoch;
+      explicitLanding = id;
       setActive(id);
-      if (record && location.hash !== '#' + id) history.pushState(null, '', location.pathname + location.search + '#' + id);
+      // Chapter controls scroll directly without adding URL/history entries.
+      // Legacy fragment arrivals still work, then normalize to the clean URL.
+      if (location.hash) history.replaceState(history.state, '', location.pathname + location.search);
+      if (overviewRevealRuntime) overviewRevealRuntime.revealTarget(id);
       var start = window.scrollY, end = targetTop(id), started = performance.now();
       var duration = Math.min(1500, Math.max(420, 420 + Math.abs(end - start) / Math.max(1, innerHeight) * 180));
       // Schedule body movement before starting the capsule; reduced motion's
@@ -895,10 +990,41 @@
     }
     function spy() {
       spyFrame = 0; if (scrollFrame || disposed) return;
-      var threshold = header.getBoundingClientRect().height + 36;
-      var id = 'about';
-      targets.forEach(function (target) { if (target.getBoundingClientRect().top <= threshold) id = target.id; });
-      if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2 && window.scrollY > 0) id = 'honors';
+      // A clamped explicit destination can sit below the reading line. Keep
+      // the clicked/history target until the reader actually leaves it.
+      if (explicitLanding && Math.abs(window.scrollY - targetTop(explicitLanding)) < 2) return;
+      explicitLanding = null;
+      var viewport = window.visualViewport;
+      var viewportTop = viewport ? viewport.offsetTop : 0;
+      var top = Math.max(viewportTop, header.getBoundingClientRect().bottom) + 12;
+      var bottom = Math.min(innerHeight, viewportTop + (viewport ? viewport.height : innerHeight));
+      var readingLine = top + Math.max(0, bottom - top) * .3;
+      var activeIndex = targets.findIndex(function (target) { return target.id === active; });
+      var id = active, crossedHeading = null, readingSection = null, finalHeadingVisible = false;
+      targets.forEach(function (target, index) {
+        // #about is the whole homepage anchor; its reading body is only the
+        // About section, otherwise it would claim gaps throughout the page.
+        var sectionElement = target.id === 'about' ? target.querySelector('.about-section') : target;
+        var heading = sectionElement && sectionElement.querySelector('.section-title');
+        if (!heading) return;
+        var rect = heading.getBoundingClientRect(), section = sectionElement.getBoundingClientRect();
+        if (index === targets.length - 1) finalHeadingVisible = rect.top >= top - .5 && rect.bottom <= bottom + .5;
+        // Seeing the next title at the bottom is not yet reading its section.
+        // Activate at the upper 30% reading line, requiring the whole title to
+        // be visible. A 12px return margin avoids toggling on tiny wheel jitter.
+        var threshold = readingLine + (index <= activeIndex ? 12 : 0);
+        if (rect.top >= top - .5 && rect.bottom <= bottom + .5 &&
+            rect.top <= threshold) crossedHeading = target.id;
+        // Deep inside a long section, no heading may be in view. Preserve its
+        // reading context, including native scroll restoration; a partially
+        // covered title is intentionally excluded from this fallback as well.
+        if (rect.bottom <= top && section.top <= top && section.bottom > top) readingSection = target.id;
+      });
+      if (crossedHeading) id = crossedHeading;
+      else if (readingSection) id = readingSection;
+      // The final section cannot always reach the line because scrolling ends.
+      if (finalHeadingVisible && window.scrollY + innerHeight >= document.documentElement.scrollHeight - 2) id = targets[targets.length - 1].id;
+      if (window.scrollY <= 1) id = 'about';
       if (id !== active) { setActive(id); place(true, true); }
     }
     function onScroll() { if (!spyFrame && !scrollFrame) spyFrame = requestAnimationFrame(spy); }
@@ -911,17 +1037,18 @@
       panel.inert = compact && !menuOpen();
       if (compact && panel.contains(document.activeElement) && panel.inert) toggle.focus({ preventScroll: true });
       place(false, true);
+      onScroll();
     }
     function scheduleLayout() { if (!disposed && !layoutFrame) layoutFrame = requestAnimationFrame(layout); }
-    function onResize() { if (menuOpen()) closeMenu(panel.contains(document.activeElement)); scheduleLayout(); }
+    function onResize() { if (menuOpen()) closeMenu(panel.contains(document.activeElement)); scheduleLayout(); onScroll(); }
     function onClick(event) {
       var node = event.target instanceof Element ? event.target : null;
       if (!node) return;
       readerIntervened = true;
-      var link = node.closest('.academic-header-name, [data-academic-section]');
+      var link = node.closest('[data-academic-section]');
       if (link && header.contains(link) && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
         event.preventDefault(); event.stopImmediatePropagation(); readerIntervened = true;
-        navigate(link.dataset.academicSection || 'about', true, true); return;
+        navigate(link.dataset.academicSection || 'about', true); return;
       }
       if (node.closest('.academic-header-menu') === toggle) { event.preventDefault(); menuOpen() ? closeMenu(false) : openMenu(); return; }
       if (menuOpen() && !panel.contains(node)) closeMenu(false);
@@ -934,6 +1061,7 @@
         if (rail.contains(event.target) && (event.type === 'touchmove' || Math.abs(event.deltaX) > Math.abs(event.deltaY))) return;
         if (event.cancelable) event.preventDefault(); return;
       }
+      explicitLanding = null;
       cancelScroll();
     }
     function onKey(event) {
@@ -950,8 +1078,10 @@
       }
     }
     function onHistory() {
-      var hash = location.hash, id = hash.slice(1) || 'about';
-      navigate(id, false, false); var ticket = sequence;
+      readerIntervened = true;
+      if (!location.hash) { onScroll(); return; }
+      var id = location.hash.slice(1);
+      navigate(id, false); var hash = location.hash, ticket = sequence;
       cancelAnimationFrame(historyFrame);
       historyFrame = requestAnimationFrame(function () {
         historyFrame = requestAnimationFrame(function () {
@@ -959,12 +1089,20 @@
           // Native history restoration can run after popstate. One bounded
           // post-restoration correction honors chapter links without disabling
           // normal browser refresh/reading-position restoration globally.
-          if (!disposed && ticket === sequence && location.hash === hash) navigate(id, false, false);
+          if (!disposed && ticket === sequence && location.hash === hash) navigate(id, false);
         });
       });
     }
     function onMotionChange() { if (reduced.matches) { cancelScroll(); closeMenu(false); place(false, true); } }
-    function collect() { targets = links.map(function (link) { return document.getElementById(link.dataset.academicSection); }).filter(Boolean); }
+    function collect() {
+      targets = links.map(function (link) { return document.getElementById(link.dataset.academicSection); }).filter(Boolean);
+      var nextDetails = document.querySelector('.about-profile-details');
+      if (profileDetails !== nextDetails) {
+        if (profileDetails) profileDetails.removeEventListener('toggle', onScroll);
+        profileDetails = nextDetails;
+        if (profileDetails) profileDetails.addEventListener('toggle', onScroll);
+      }
+    }
     academicHeaderRuntime = {
       header: header,
       arrive: function () { collect(); scheduleLayout(); },
@@ -977,6 +1115,11 @@
         window.removeEventListener('wheel', onManualScroll); window.removeEventListener('touchmove', onManualScroll);
         window.removeEventListener('keydown', onKey, true); window.removeEventListener('popstate', onHistory);
         window.removeEventListener('hashchange', onHistory); rail.removeEventListener('scroll', onRailScroll);
+        if (profileDetails) profileDetails.removeEventListener('toggle', onScroll);
+        if (window.visualViewport) {
+          window.visualViewport.removeEventListener('resize', onScroll);
+          window.visualViewport.removeEventListener('scroll', onScroll);
+        }
         if (reduced.removeEventListener) reduced.removeEventListener('change', onMotionChange);
         if (document.fonts) document.fonts.removeEventListener('loadingdone', scheduleLayout);
       }
@@ -988,6 +1131,10 @@
     window.addEventListener('wheel', onManualScroll, { passive: false }); window.addEventListener('touchmove', onManualScroll, { passive: false });
     window.addEventListener('keydown', onKey, true); window.addEventListener('popstate', onHistory); window.addEventListener('hashchange', onHistory);
     rail.addEventListener('scroll', onRailScroll, { passive: true });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', onScroll, { passive: true });
+      window.visualViewport.addEventListener('scroll', onScroll, { passive: true });
+    }
     if (resize) { resize.observe(header); resize.observe(list); }
     if (reduced.addEventListener) reduced.addEventListener('change', onMotionChange);
     if (document.fonts) { document.fonts.addEventListener('loadingdone', scheduleLayout); document.fonts.ready.then(scheduleLayout); }
@@ -996,8 +1143,8 @@
     // never override a reader's intervening scroll, click or history change.
     var initialHash = location.hash;
     function alignInitialChapter() {
-      if (disposed || readerIntervened || location.hash !== initialHash || !initialHash) return;
-      navigate(initialHash.slice(1), false, false);
+      if (disposed || readerIntervened || (location.hash && location.hash !== initialHash) || !initialHash) return;
+      navigate(initialHash.slice(1), false);
     }
     requestAnimationFrame(alignInitialChapter);
     if (document.fonts) document.fonts.ready.then(alignInitialChapter);
@@ -5012,7 +5159,7 @@
     var pageShown = document.readyState === "complete";
     var restoringViewport = false;
     var disposed = false;
-    var state = { root: root, dispose: dispose };
+    var state = { root: root, dispose: dispose, revealTarget: onChapterTarget };
     overviewRevealRuntime = state;
 
     function active() {
@@ -5104,6 +5251,14 @@
       readerStarted = true;
       readingScrollIntent = false;
       revealHash();
+      finishIfComplete();
+    }
+    function onChapterTarget(id) {
+      if (!active()) return;
+      readerStarted = true;
+      readingScrollIntent = false;
+      var target = document.getElementById(id);
+      if (target) revealThrough(target);
       finishIfComplete();
     }
     function onFocus(event) {
@@ -5343,6 +5498,7 @@
     ensureTocGlass();
     setupHeaderSearchTransition();
     setupTabGlass();
+    setupAcademicWheelScroll();
     normalizePaletteButtons();
     normalizeSourceFacts();
     if (!latestSourceFacts) restoreStoredSourceFacts();
