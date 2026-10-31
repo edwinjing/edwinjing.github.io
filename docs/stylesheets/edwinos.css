@@ -4131,7 +4131,8 @@ body .md-progress {
 /* Header: independent academic name, chapter rail and compact glass panel. */
 .edwinos-academic-header .edwinos-tab-glass-track { z-index: 23; }
 .edwinos-academic-header .md-header__inner {
-    padding-inline: var(--edwinos-header-edge) 12px !important;
+    /* Match the centered 80rem homepage shell on ultrawide viewports. */
+    padding-inline: max(var(--edwinos-header-edge), calc((100% - 80rem) / 2)) max(12px, calc((100% - 80rem) / 2)) !important;
     gap: 20px !important;
     justify-content: space-between !important;
 }
@@ -6681,7 +6682,6 @@ body:has(.academic-home-layout) .academic-home-layout:not(.academic-home-layout-
 /* Only the heading and short introduction size the background; details stay independent. */
 .academic-home-layout .academic-content > .about-section {
     --about-surface: var(--github-frame-light-bg);
-    --about-photo-outset: max(clamp(0.9rem, 3.4vw, 2rem), calc((100vw - 80rem) / 2));
     position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -6719,8 +6719,9 @@ body:has(.academic-home-layout) .academic-home-layout:not(.academic-home-layout-
     z-index: 0;
     align-self: stretch;
     justify-self: end;
-    right: calc(-1 * var(--about-photo-outset));
-    width: calc(100% + var(--about-photo-outset));
+    /* Align the photo with the right edge of the content sections. */
+    right: 0;
+    width: 100%;
     min-width: 0;
     min-height: 0;
     contain: size;
@@ -6797,12 +6798,6 @@ body:has(.academic-home-layout) .academic-home-layout:not(.academic-home-layout-
     backdrop-filter: blur(12px);
     -webkit-mask-image: linear-gradient(to right, #000 0% 5%, rgb(0 0 0 / 85%) 10%, rgb(0 0 0 / 50%) 17%, rgb(0 0 0 / 15%) 24%, transparent 32% 100%);
     mask-image: linear-gradient(to right, #000 0% 5%, rgb(0 0 0 / 85%) 10%, rgb(0 0 0 / 50%) 17%, rgb(0 0 0 / 15%) 24%, transparent 32% 100%);
-}
-
-@media (max-width: 768px) {
-    .academic-home-layout .academic-content > .about-section {
-        --about-photo-outset: 0.85rem;
-    }
 }
 
 @media (max-width: 680px) {
