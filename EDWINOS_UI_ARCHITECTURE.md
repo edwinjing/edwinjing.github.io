@@ -2,12 +2,17 @@
 
 The inherited architecture follows below for the copied EdwinOS components.
 For this checkout, the enabled hooks are `home_sections.py` and `homepage.py`.
-Only the homepage is built, with no search bootstrap or blog routes. The header
+The academic site publishes Overview and Friends, with no search bootstrap. The header
 contains the name, seven chapter links, GitHub and the native palette control.
 `setupAcademicHeader` owns chapter scrolling, history, compact menu and the
 selected glass; it reuses the original optical primitives. The native body
 reveal, media and footer owners are unchanged. `block-links.js` yields the seven
 chapter IDs, preserving its other body-fragment behavior.
+
+On Friends, chapter links return to the corresponding Overview section and
+the header has no active chapter. The shared profile uses the Overview markup
+with rebased local URLs. The build derives both displayed counts from the
+authored Friends cards in `docs/HOME/friends.md`.
 
 The header name is static, non-focusable text with scoped `user-select: none`;
 only explicit chapter links navigate. `setupAcademicWheelScroll` in `ui-perf.js`
@@ -548,7 +553,16 @@ lines. No individual row glass or general Safari page-copy renderer is introduce
   `data/homepage/publications.yml`.
 - Repository stars/forks fallback: `docs/assets/data/github-repo.json`, updated
   by `tools/write_github_repo_facts.py`.
-- Friends cards: `docs/HOME/friends.md`.
+- Friends cards and page-level Contents visibility: `docs/HOME/friends.md`.
+  Cards use a capsule lens with padded backdrop sampling and low tint through
+  `setupContentGlass`. The lens bends the page backdrop inward around the
+  perimeter so it does not pick up an adjacent card's rim. In the dark theme,
+  soft reflection and shading are painted inside the capsule above the lens.
+  The entire painted surface lifts on hover within a stationary, unpainted link
+  hit area. The link exchange example inherits Friends prose styling.
+- Academic footer: `overrides/partials/academic-footer.html` renders inside the
+  Overview and Friends content columns. Both show the same license, signature
+  and academic deployment month. The visitor badge is rendered on Overview.
 - Archive cards: generated from content metadata by `hooks/archive.py`.
 - ENotes/More footer metadata, including child articles:
   `overrides/partials/notes-footer.html`, scoped by `overrides/main.html` to those
@@ -557,7 +571,7 @@ lines. No individual row glass or general Safari page-copy renderer is introduce
   Overview's Visitor Footer type rules and deployment-month runtime, but has no
   visitor badge. Metadata stays on one
   line when space permits and wraps naturally when narrow. The build month is
-  the no-JS/API-failure fallback; other routes retain Material's copyright path.
+  the no-JS/API-failure fallback.
 
 The source repository name and the deployment repository name are currently
 different by design in the existing data. Do not normalize them during a UI

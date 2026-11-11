@@ -3,8 +3,9 @@
 This checkout is `/Users/edwin/Documents/homepage`, for `edwinjing/edwinjing.github.io`.
 The blog `/Users/edwin/Documents/edwinjing-blog-website` is strictly read-only.
 Never run builds, formatting, installs, or edits in that source checkout.
-The inherited EdwinOS governance below applies to shared components; blog-only
-routes and search are not published here. The homepage's custom chapter header
+The academic site publishes Overview and Friends. Archive, notes and search
+belong to the blog. The inherited EdwinOS governance below applies to shared
+components. The homepage's custom chapter header
 is owned by `header.html`, the Header section of `edwinos.css`, and
 `setupAcademicHeader` in `ui-perf.js`. `block-links.js` excludes the seven chapter
 IDs so whole sections are never highlighted as note fragments.
@@ -274,10 +275,13 @@ Current stylesheet policy:
   child surface from sampling the page. Keep its lighter optical tuning separate
   from search. Rebuild the map only
   for layout/font changes, never on every scroll frame.
-  Supplemental glass on the Profile Archive action, Archive date capsule and
-  native single-copy toolbar, plus the three ENotes introduction cards, is
+  Supplemental glass on Friends cards, the Profile action, Archive date capsule,
+  native single-copy toolbar, and the three ENotes introduction cards is
   owned by `setupContentGlass`: initialize near
-  the viewport and dispose on exit/content replacement. Keep copy language
+  the viewport and dispose on exit/content replacement. Friends uses a capsule
+  lens with padded backdrop sampling. Keep the stationary link hit area
+  unpainted so the border, refraction and shadow all lift with the surface.
+  Keep copy language
   labels in a separate slot through all reveal states; preserve Material's
   copy target, icon and success feedback. `setupDrawerGlass` owns the mobile
   ENotes/More outer surface and bounded optical gain animation. Its outer native

@@ -1,4 +1,4 @@
-"""Independent homepage build contract; the original blog remains untouched."""
+"""Limit academic pages and derive their profile count from the Friends page."""
 from __future__ import annotations
 
 import re
@@ -6,10 +6,14 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from mkdocs.exceptions import PluginError
+from mkdocs.plugins import event_priority
+
+
+FRIENDS_PAGE = "HOME/friends.md"
 
 
 class FriendCards(HTMLParser):
-    """Match the source blog runtime's real-card counting rule."""
+    """Count authored friend links while skipping examples."""
 
     def __init__(self):
         super().__init__()
@@ -23,16 +27,20 @@ class FriendCards(HTMLParser):
             self.count += 1
 
 
-def on_page_markdown(markdown, page, config, files):
-    if page.file.src_uri != "index.md":
-        raise PluginError("The independent homepage must only publish index.md")
-    source = Path(config.config_file_path).parent / "data/homepage/friends-source.md"
-    if not source.is_file():
-        raise PluginError("Missing homepage Friends count source: " + str(source))
+@event_priority(-10)
+def on_page_content(html, page, config, files):
+    # Run after home_sections has inserted the shared profile on Friends.
+    if page.file.src_uri not in ("index.md", FRIENDS_PAGE):
+        raise PluginError("The academic site can only publish Overview and Friends")
+    source = Path(config["docs_dir"]) / FRIENDS_PAGE
+    try:
+        friends = source.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise PluginError(f"Missing Friends count source: {source}") from exc
     parser = FriendCards()
-    parser.feed(source.read_text(encoding="utf-8"))
+    parser.feed(friends)
     marker = r'(<span\b[^>]*\bid="friend-count"[^>]*>)[^<]*(</span>)'
-    result, replacements = re.subn(marker, lambda match: f"{match[1]}{parser.count}{match[2]}", markdown)
+    result, replacements = re.subn(marker, lambda match: f"{match[1]}{parser.count}{match[2]}", html)
     if replacements != 1 or 'data-friend-count-static="true"' not in result:
         raise PluginError("Expected exactly one static homepage Friends count")
     return result

@@ -296,6 +296,9 @@
     var datasetMode = options.datasetMode;
     var datasetBuilds = options.datasetBuilds;
     var padding = options.padding === undefined ? 16 : options.padding;
+    // A clipped, oversized backdrop layer samples outside the visible lens.
+    var sampleOrigin = options.paddedBackdrop ? 0 : -padding;
+    var samplePaddingProperty = '--' + prefix + '-sample-padding';
     var referenceLens = options.profile === 'shuding';
     var referenceScale = 0;
     var motionStrength = 0;
@@ -323,6 +326,7 @@
     feedback.classList.toggle(prefix + '-refraction', refraction);
     feedback.dataset[datasetMode] = refraction ? 'refraction' : 'native-blur';
     if (refraction && options.filterVariable) feedback.style.setProperty(options.filterVariable, 'url(#' + filterId + ')');
+    if (refraction && options.paddedBackdrop) feedback.style.setProperty(samplePaddingProperty, padding + 'px');
     var filter;
     var mapImage;
     if (refraction) {
@@ -336,13 +340,13 @@
       filter.setAttribute('id', filterId);
       filter.setAttribute('filterUnits', 'userSpaceOnUse');
       filter.setAttribute('color-interpolation-filters', 'sRGB');
-      filter.setAttribute('x', String(-padding));
-      filter.setAttribute('y', String(-padding));
+      filter.setAttribute('x', String(sampleOrigin));
+      filter.setAttribute('y', String(sampleOrigin));
       mapImage = document.createElementNS(svgNS, 'feImage');
       mapImage.setAttribute('result', prefix + '-map');
       mapImage.setAttribute('preserveAspectRatio', 'none');
-      mapImage.setAttribute('x', String(-padding));
-      mapImage.setAttribute('y', String(-padding));
+      mapImage.setAttribute('x', String(sampleOrigin));
+      mapImage.setAttribute('y', String(sampleOrigin));
       var blur = document.createElementNS(svgNS, 'feGaussianBlur');
       blur.setAttribute('in', 'SourceGraphic');
       blur.setAttribute('stdDeviation', String(options.blur === undefined ? 4 : options.blur));
@@ -420,8 +424,8 @@
       // lens or expose an incompletely covered backdrop.
       filter.setAttribute('width', sampleWidth);
       filter.setAttribute('height', sampleHeight);
-      mapImage.setAttribute('x', referenceLens ? 0 : -padding);
-      mapImage.setAttribute('y', referenceLens ? 0 : -padding);
+      mapImage.setAttribute('x', referenceLens ? 0 : sampleOrigin);
+      mapImage.setAttribute('y', referenceLens ? 0 : sampleOrigin);
       mapImage.setAttribute('width', referenceLens ? box.width : sampleWidth);
       mapImage.setAttribute('height', referenceLens ? box.height : sampleHeight);
       if (referenceLens && mapWidth) {
@@ -504,6 +508,7 @@
         if (options.datasetFrozen) delete feedback.dataset[options.datasetFrozen];
         feedback.style.removeProperty('--' + prefix + '-radius');
         if (options.filterVariable) feedback.style.removeProperty(options.filterVariable);
+        if (options.paddedBackdrop) feedback.style.removeProperty(samplePaddingProperty);
       }
     };
   }
@@ -841,7 +846,7 @@
     var panelOptics = null, panelFrame = 0;
     var frame = 0, scrollFrame = 0, layoutFrame = 0, spyFrame = 0, historyFrame = 0;
     var sequence = 0, menuEpoch = 0, disposed = false, readerIntervened = false;
-    var active = 'about', current = null, targets = [], profileDetails = null, explicitLanding = null;
+    var active = '', current = null, targets = [], profileDetails = null, explicitLanding = null;
     var resize = typeof ResizeObserver === 'function' ? new ResizeObserver(scheduleLayout) : null;
 
     function paint(box) {
@@ -956,7 +961,7 @@
       sequence += 1; cancelAnimationFrame(scrollFrame); scrollFrame = 0;
     }
     function navigate(id, animate) {
-      if (!links.some(function (link) { return link.dataset.academicSection === id; })) return;
+      if (!targets.some(function (target) { return target.id === id; })) return;
       stopAcademicWheelScroll();
       cancelScroll(); var ticket = sequence, epoch = menuEpoch;
       explicitLanding = id;
@@ -989,7 +994,7 @@
       });
     }
     function spy() {
-      spyFrame = 0; if (scrollFrame || disposed) return;
+      spyFrame = 0; if (scrollFrame || disposed || !targets.length) return;
       // A clamped explicit destination can sit below the reading line. Keep
       // the clicked/history target until the reader actually leaves it.
       if (explicitLanding && Math.abs(window.scrollY - targetTop(explicitLanding)) < 2) return;
@@ -1046,7 +1051,8 @@
       if (!node) return;
       readerIntervened = true;
       var link = node.closest('[data-academic-section]');
-      if (link && header.contains(link) && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+      if (link && header.contains(link) && targets.some(function (target) { return target.id === link.dataset.academicSection; }) &&
+          event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
         event.preventDefault(); event.stopImmediatePropagation(); readerIntervened = true;
         navigate(link.dataset.academicSection || 'about', true); return;
       }
@@ -1124,7 +1130,9 @@
         if (document.fonts) document.fonts.removeEventListener('loadingdone', scheduleLayout);
       }
     };
-    collect(); setActive(links.some(function (link) { return link.dataset.academicSection === location.hash.slice(1); }) ? location.hash.slice(1) : 'about');
+    collect();
+    var initialChapter = targets.find(function (target) { return target.id === location.hash.slice(1); }) || targets[0];
+    setActive(initialChapter ? initialChapter.id : '');
     header.dataset.edwinosTabGlassReady = '1'; layout();
     window.addEventListener('click', onClick, true);
     window.addEventListener('scroll', onScroll, { passive: true }); window.addEventListener('resize', onResize, { passive: true });
@@ -1406,20 +1414,18 @@
       var name = record.name;
       var prefix = 'edwinos-' + name;
       controlGlassSequence += 1;
-      record.optics = setupLayoutControlGlass(record.element, {
+      record.optics = setupLayoutControlGlass(record.element, Object.assign({
         prefix: prefix,
         filterId: prefix + '-refraction-' + controlGlassSequence,
         filterVariable: '--' + prefix + '-filter',
         datasetMode: 'edwinosControlGlassMode',
         datasetBuilds: 'edwinosControlGlassBuilds',
-        blur: record.blur,
-        strength: record.strength,
         padding: 12
-      });
+      }, record.options));
     }
-    function register(element, name, blur, strength) {
+    function register(element, name, options) {
       if (records.has(element)) return;
-      var record = { element: element, name: name, blur: blur, strength: strength, optics: null };
+      var record = { element: element, name: name, options: options, optics: null };
       records.set(element, record);
       if (visibility) visibility.observe(element);
       else {
@@ -1432,7 +1438,7 @@
       content.querySelectorAll('.md-code__nav').forEach(function (nav) {
         var buttons = nav.querySelectorAll('.md-code__button');
         if (buttons.length === 1 && buttons[0].getAttribute('data-md-type') === 'copy') {
-          register(nav, 'copy', 2.5, 8);
+          register(nav, 'copy', { blur: 2.5, strength: 8 });
         }
       });
       records.forEach(function (record, element) {
@@ -1443,13 +1449,20 @@
       });
     }
     content.querySelectorAll('.profile-actions > .btn-github-action').forEach(function (element) {
-      register(element, 'profile-action', 3.5, 10);
+      register(element, 'profile-action', { blur: 3.5, strength: 10 });
     });
     content.querySelectorAll('.archive-hero__stats > span').forEach(function (element) {
-      register(element, 'archive-stat', 5, 10);
+      register(element, 'archive-stat', { blur: 5, strength: 10 });
     });
     content.querySelectorAll('.notes-landing .landing-route').forEach(function (element) {
-      register(element, 'landing-route', 4, 18);
+      register(element, 'landing-route', { blur: 4, strength: 18 });
+    });
+    content.querySelectorAll('.friend-card > .friend-card__surface').forEach(function (element) {
+      // Bend inward so the lens doesn't pull in the rim of a neighboring card.
+      register(element, 'friend-card', {
+        blur: 2.5, edgeBlur: 0.6, blurTransition: 13,
+        strength: -28, rim: 22, padding: 26, pixelRatio: 1, paddedBackdrop: true
+      });
     });
     discoverCopyControls();
     if (typeof window.MutationObserver === 'function' && content.querySelector('pre')) {

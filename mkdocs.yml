@@ -108,7 +108,7 @@ plugins:
 watch:
   - data/homepage
 
-# 构建时渲染 Overview 数据，并生成固定的 Friends 数字。
+# 构建时渲染 Overview 数据，并从 Friends 页面生成友链数量。
 hooks:
   - hooks/home_sections.py
   - hooks/homepage.py
@@ -169,11 +169,12 @@ extra_javascript:
   # 必须在 docs/javascripts/ 目录下创建 mathjax.js 文件 (内容见报告正文)
   - javascripts/mathjax.js?v=20261011b
   - javascripts/block-links.js?v=20261027a  # Obsidian 风格块引用链接支持
-  - javascripts/ui-perf.js?v=20261027e
+  - javascripts/ui-perf.js?v=20261111d
 
 extra_css:
-  - stylesheets/edwinos.css?v=20261111a  # Unified EdwinOS cascade
+  - stylesheets/edwinos.css?v=20261111e  # Unified EdwinOS cascade
 
-# --- 7. Single academic homepage ---
+# --- 7. Academic homepage ---
 nav:
   - Overview: index.md
+  - Friends: HOME/friends.md

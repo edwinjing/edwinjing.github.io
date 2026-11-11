@@ -1,5 +1,8 @@
 {% extends "base.html" %}
-{% set edwinos_notes_footer = page and page.file and (page.file.src_uri.startswith("OsdNotes/") or page.file.src_uri.startswith("经验分享/")) %}
+{% set edwinos_source = page.file.src_uri if page and page.file else "" %}
+{% set edwinos_overview = edwinos_source == "index.md" %}
+{% set edwinos_academic_footer = edwinos_source in ["index.md", "HOME/friends.md"] %}
+{% set edwinos_notes_footer = edwinos_source.startswith(("OsdNotes/", "经验分享/")) %}
 
 {% block htmltitle %}
   {% if page.url == "" %}
@@ -111,14 +114,20 @@
 {% endblock %}
 
 {% block content %}
-  {{ super() }}
+  {% if edwinos_academic_footer %}
+    {# Both markers are inside the academic content column. #}
+    {% set academic_footer %}{% include "partials/academic-footer.html" %}{% endset %}
+    {{ super() | replace("<!-- ACADEMIC_FOOTER -->", academic_footer) }}
+  {% else %}
+    {{ super() }}
+  {% endif %}
   {% if edwinos_notes_footer %}
     {% include "partials/notes-footer.html" %}
   {% endif %}
 {% endblock %}
 
 {% block footer %}
-  {% if page.url not in ["", "index.html"] and not edwinos_notes_footer %}
+  {% if not edwinos_academic_footer and not edwinos_notes_footer %}
     {{ super() }}
   {% endif %}
 {% endblock %}

@@ -1,4 +1,5 @@
 {# Independent academic navigation; native palette and EdwinOS optics retained. #}
+{% set academic_home = page.url in ["", "index.html"] %}
 <header class="md-header md-header--shadow edwinos-academic-header" data-md-component="header" data-academic-header>
   <div class="edwinos-tab-glass-track" aria-hidden="true"><span class="edwinos-tab-glass"></span></div>
   <div class="edwinos-header-glass" aria-hidden="true">
@@ -13,7 +14,7 @@
       <nav class="md-tabs" aria-label="Homepage sections">
         <div class="md-grid"><ul class="md-tabs__list">
         {% for id, label in [('about', 'About'), ('news', 'News'), ('education', 'Education'), ('experience', 'Experience'), ('publications', 'Publications'), ('workshops', 'Workshops'), ('honors', 'Honors')] %}
-          <li class="md-tabs__item"><a class="md-tabs__link" href="{{ '/' | url }}#{{ id }}" data-academic-section="{{ id }}"{% if loop.first %} aria-current="location"{% endif %}>{{ label }}</a></li>
+          <li class="md-tabs__item"><a class="md-tabs__link" href="{{ './' | url }}#{{ id }}" data-academic-section="{{ id }}"{% if academic_home and loop.first %} aria-current="location"{% endif %}>{{ label }}</a></li>
         {% endfor %}
         </ul></div>
       </nav>
@@ -56,7 +57,7 @@
       var required=h.querySelector('.academic-header-name').offsetWidth+list.scrollWidth+112+64;
       h.dataset.compact=String(innerWidth<required);
       var panel=h.querySelector('.academic-header-panel');panel.inert=h.dataset.compact==='true';
-      var b=window.__edwinosTabGlassGeometry(h,location.hash||'#about');
+      var b=window.__edwinosTabGlassGeometry(h,{{ 'true' if academic_home else 'false' }} ? location.hash||'#about' : '#');
       var s=h.querySelector('.edwinos-tab-glass');h.dataset.edwinosTabGlassReady='1';s.hidden=!b.selected;
       if(b.selected){s.style.cssText='left:'+b.x+'px;top:'+b.y+'px;width:'+b.width+'px;height:'+b.height+'px';s.dataset.edwinosTabSelected=b.key;}
     })();

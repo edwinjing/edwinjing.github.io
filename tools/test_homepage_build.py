@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 import re
 import sys
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, urljoin, urlsplit
 
 
 class Document(HTMLParser):
@@ -29,14 +29,16 @@ for identifier in ("about", "news", "education", "experience", "publications", "
     assert ids.count(identifier) == 1, f"Missing/duplicate chapter: {identifier}"
 assert html.index('id="about"') < html.index('class="academic-sidebar"'), "About must precede mobile profile"
 anchors = {attrs.get("href") for tag, attrs in doc.nodes if tag == "a"}
-for target in ("HOME/friends/", "OsdNotes/", "经验分享/"):
+for target in ("OsdNotes/", "经验分享/"):
     assert "https://edwinjing-blog.com/" + target in anchors, f"Missing blog outbound link {target}"
+home_url = "https://edwinjing.github.io/"
+friends_url = urljoin(home_url, "HOME/friends/")
+follower_links = [attrs["href"] for tag, attrs in doc.nodes if tag == "a" and attrs.get("class") == "follower-link"]
+assert [urljoin(home_url, href) for href in follower_links] == [friends_url], follower_links
 assert re.search(r'<a\b[^>]*\bhref="assets/cv/chen-jing-cv\.pdf"[^>]*>Resume</a>', html), "Missing Resume link"
-assert 'data-friend-count-static="true">2</span>' in html, "Baseline Friends count changed"
-assert 'data-deployment-repository="edwinjing/edwinjing.github.io"' in html
 assert "path=https%3A%2F%2Fedwinjing-blog.com%2F" in html, "Shared visitor key changed"
 canonical = [attrs["href"] for tag, attrs in doc.nodes if tag == "link" and attrs.get("rel") == "canonical"]
-assert canonical == ["https://edwinjing.github.io/"], canonical
+assert canonical == [home_url], canonical
 assert not re.search(r'<meta[^>]+content="[^"]*(?:noindex|nosnippet)', html, re.I)
 assert 'name="description"' in html
 for schema in re.findall(r'<script type="application/ld\+json">(.*?)</script>', html, re.S):
@@ -44,7 +46,7 @@ for schema in re.findall(r'<script type="application/ld\+json">(.*?)</script>', 
     assert all(item["@id"].startswith("https://edwinjing.github.io/") for item in graph)
 assert "https://edwinjing.github.io/sitemap.xml" in (site / "robots.txt").read_text()
 assert "https://edwinjing-blog.com/" not in (site / "sitemap.xml").read_text()
-for path in ("CNAME", "BingSiteAuth.xml", "HOME", "OsdNotes", "经验分享", "blog", "research", "search", "javascripts/search-loader.js"):
+for path in ("CNAME", "BingSiteAuth.xml", "HOME/Archive", "OsdNotes", "经验分享", "blog", "research", "search", "javascripts/search-loader.js"):
     assert not (site / path).exists(), f"Unexpected published blog/search content: {path}"
 assert "search-loader.js" not in html and "search-exact-worker" not in html
 for tag, attrs in doc.nodes:
@@ -63,4 +65,49 @@ for tag, attrs in doc.nodes:
             continue
         asset = site / unquote(parsed.path).lstrip("/")
         assert asset.exists(), f"Missing local resource: {url}"
-print("PASS: homepage content, section targets, outbound links, SEO, shared footer, assets and publication scope")
+
+friends_html = (site / "HOME/friends/index.html").read_text()
+friends = Document()
+friends.feed(friends_html)
+for name, document in (("Overview", doc), ("Friends", friends)):
+    footers = [attrs for tag, attrs in document.nodes if tag == "footer"]
+    assert len(footers) == 1 and "visitor-meta-footer" in footers[0].get("class", "").split(), name
+    assert footers[0].get("data-deployment-repository") == "edwinjing/edwinjing.github.io", name
+    assert footers[0].get("data-deployment-workflow") == "deploy.yml", name
+    assert sum("data-visitor-deployment-time" in attrs for _, attrs in document.nodes) == 1, name
+    assert sum("data-visitor-badge" in attrs for _, attrs in document.nodes) == (name == "Overview"), name
+assert [attrs["href"] for tag, attrs in friends.nodes if tag == "link" and attrs.get("rel") == "canonical"] == [friends_url]
+assert '<main class="academic-content academic-content--subpage">' in friends_html
+assert all(
+    "hidden" in attrs for _, attrs in friends.nodes if attrs.get("data-md-type") == "toc"
+), "Friends shows a table of contents"
+assert "https://edwinjing-blog.com/HOME/friends/" not in html + friends_html
+cards = [attrs["href"] for tag, attrs in friends.nodes if tag == "a" and "friend-card" in attrs.get("class", "").split()]
+assert cards == ["https://thezsc.com/", "https://horacech.github.io/"], cards
+assert "https://thezsc.com/avatar.jpg" in friends_html
+for profile in (html, friends_html):
+    assert f'data-friend-count-static="true">{len(cards)}</span>' in profile, "Friends count differs from the rendered cards"
+for text in ('id="link-exchange"', 'id="link-format"', 'Link Notes', 'Please contact me through the social links on the left.'):
+    assert text in friends_html, f"Missing Friends content: {text}"
+example = re.search(r'<p class="friend-link-format">(.*?)</p>', friends_html, re.S)
+assert example and re.split(r"<br\s*/?>\s*", example[1]) == [
+    "name: Your website name",
+    "url: https://your-website.example",
+    "avatar: Avatar URL",
+    "desc: One-line introduction",
+], "Link format should be a four-line paragraph"
+assert friends_html.count('class="friend-card__surface"') == len(cards), "Every Friends link needs a glass surface"
+chapters = [attrs for tag, attrs in friends.nodes if tag == "a" and "data-academic-section" in attrs]
+assert len(chapters) == 7 and all(
+    urljoin(friends_url, attrs["href"]) == home_url + "#" + attrs["data-academic-section"] and "aria-current" not in attrs
+    for attrs in chapters
+), chapters
+portrait = next(attrs["src"] for tag, attrs in friends.nodes if tag == "img" and "avatar-edwin" in attrs.get("src", ""))
+resume = next(attrs["href"] for tag, attrs in friends.nodes if tag == "a" and attrs.get("class") == "btn-github-action")
+avatars = re.findall(r"url\('([^']*horace-chan-[^']+)'\)", friends_html)
+assert len(avatars) == 2
+for url in (portrait, resume, *avatars):
+    resolved = urljoin(friends_url, url)
+    assert resolved.startswith(home_url + "assets/") and (site / urlsplit(resolved).path.lstrip("/")).is_file(), url
+
+print("PASS: Overview and Friends content, section targets, links, SEO, assets and publication scope")

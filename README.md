@@ -1,6 +1,6 @@
 # Chen Jing · Academic homepage
 
-Independent MkDocs + Material / EdwinOS copy of the full Overview, intended for
+Independent MkDocs + Material / EdwinOS site for Overview and Friends at
 https://edwinjing.github.io/. Published through GitHub Actions; see DEPLOYMENT.md for the release contract.
 
 ## Local development
@@ -20,8 +20,9 @@ selectolax compatibility pin needed by the image lightbox.
 
 ## Ownership
 
-- `docs/index.md`: unchanged Overview body, section IDs, outbound blog links.
-- `data/homepage/`: News, publications and frozen Friends source.
+- `docs/index.md`: Overview body, section IDs and profile links.
+- `docs/HOME/friends.md`: Friends content and source of the profile's friend count.
+- `data/homepage/`: News and publications.
 - `hooks/home_sections.py`, `hooks/homepage.py`: homepage build preparation.
 - `overrides/partials/header.html`: academic navigation and native theme toggle.
 - `docs/stylesheets/edwinos.css`: the single EdwinOS custom stylesheet.
