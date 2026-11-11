@@ -172,7 +172,7 @@ extra_javascript:
   - javascripts/ui-perf.js?v=20261027e
 
 extra_css:
-  - stylesheets/edwinos.css?v=20261027e  # Unified EdwinOS cascade
+  - stylesheets/edwinos.css?v=20261111  # Unified EdwinOS cascade
 
 # --- 7. Single academic homepage ---
 nav:

@@ -11,7 +11,7 @@ description: "Personal academic homepage of Chen Jing (经宸), a Mechanical Eng
   <aside class="academic-sidebar">
     <div class="profile-card">
       <div class="profile-avatar">
-        <img src="./assets/images/avatar-edwin-notionists.svg" alt="Chen Jing (经宸)" loading="eager" fetchpriority="high" decoding="async">
+        <img src="./assets/images/avatar-edwin-portrait.webp" alt="Chen Jing (经宸)" width="1536" height="1024" loading="eager" fetchpriority="high" decoding="async">
       </div>
 
       <div class="profile-details">
