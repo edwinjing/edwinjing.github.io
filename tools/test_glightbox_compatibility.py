@@ -18,12 +18,12 @@ class Images(HTMLParser):
 
 
 class LightboxCompatibilityTests(unittest.TestCase):
-    def test_avatar_and_article_images_survive_lightbox_wrapping(self):
+    def test_avatar_stays_static_and_article_image_gets_lightbox(self):
         plugin = LightboxPlugin()
         plugin.load_config({})
         plugin.using_material_privacy = False
         markup = (
-            '<div class="profile-avatar"><img src="./assets/images/avatar-edwin-notionists.svg" '
+            '<div class="profile-avatar"><img class="off-glb" src="./assets/images/avatar-edwin-portrait.webp" '
             'alt="Chen Jing (经宸)" loading="eager" fetchpriority="high"></div>'
             '<p><img src="article.png" alt="Article figure"></p>'
             '<img class="off-glb" src="thumbnail.webp" alt="Static thumbnail">'
@@ -32,7 +32,8 @@ class LightboxCompatibilityTests(unittest.TestCase):
             markup, plugin.config, {}, ["off-glb"]
         )
         self.assertEqual(Images(output).images, Images(markup).images)
-        self.assertEqual(output.count('class="glightbox"'), 2)
+        self.assertEqual(output.count('class="glightbox"'), 1)
+        self.assertIn('href="article.png"', output)
 
 
 if __name__ == "__main__":

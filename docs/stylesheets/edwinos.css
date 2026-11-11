@@ -5469,7 +5469,6 @@ body:has(.academic-home-layout) .md-content__inner::before {
 }
 
 .profile-avatar {
-    transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
     position: relative;
     height: auto;
     aspect-ratio: 1 / 1;
@@ -5477,13 +5476,6 @@ body:has(.academic-home-layout) .md-content__inner::before {
     border: 1px solid var(--academic-card-border);
     border-radius: 50%;
     background: var(--academic-soft);
-}
-
-.profile-avatar > .glightbox {
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    outline-offset: -3px;
 }
 
 .profile-avatar img {
@@ -5494,10 +5486,7 @@ body:has(.academic-home-layout) .md-content__inner::before {
     width: calc(100% * 1536 / 672);
     max-width: none;
     height: auto;
-}
-
-.academic-home-layout .profile-card:hover .profile-avatar {
-    transform: translateY(-2px);
+    pointer-events: none;
 }
 
 .profile-role {
@@ -5516,12 +5505,6 @@ body:has(.academic-home-layout) .md-content__inner::before {
     fill: currentColor;
 }
 
-@media (prefers-reduced-motion: reduce) {
-    .profile-avatar {
-        transition: none !important;
-    }
-
-}
 .academic-sidebar {
     display: flex;
     flex-direction: column;

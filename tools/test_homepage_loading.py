@@ -26,6 +26,7 @@ tags=Tags();tags.feed(html)
 assert tags.images, 'Lightbox/parser removed all images'
 avatar=next(a for a in tags.images if 'avatar-edwin' in a.get('src',''))
 assert avatar.get('loading') == 'eager' and avatar.get('fetchpriority') == 'high'
+assert re.search(r'<div class="profile-avatar">\s*<img\b', html), 'Avatar should render as a standalone image'
 assert any(a.get('loading')=='lazy' for a in tags.images)
 assert any(a.get('srcset') and a.get('sizes') and a.get('width') and a.get('height') for a in tags.images)
 assert any(a.get('rel')=='preload' and a.get('as')=='image' for a in tags.links)
