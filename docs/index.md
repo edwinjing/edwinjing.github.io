@@ -22,7 +22,7 @@ description: "Personal academic homepage of Chen Jing (经宸), a Mechanical Eng
       </div>
 
       <div class="profile-actions">
-        <a href="https://edwinjing-blog.com/HOME/Archive/" class="btn-github-action">Archive of Updates</a>
+        <a href="assets/cv/chen-jing-cv.pdf" class="btn-github-action" target="_blank" rel="noopener">Resume</a>
       </div>
 
       <div class="profile-followers">

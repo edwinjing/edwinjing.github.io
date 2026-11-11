@@ -29,8 +29,9 @@ for identifier in ("about", "news", "education", "experience", "publications", "
     assert ids.count(identifier) == 1, f"Missing/duplicate chapter: {identifier}"
 assert html.index('id="about"') < html.index('class="academic-sidebar"'), "About must precede mobile profile"
 anchors = {attrs.get("href") for tag, attrs in doc.nodes if tag == "a"}
-for target in ("HOME/Archive/", "HOME/friends/", "OsdNotes/", "经验分享/"):
+for target in ("HOME/friends/", "OsdNotes/", "经验分享/"):
     assert "https://edwinjing-blog.com/" + target in anchors, f"Missing blog outbound link {target}"
+assert re.search(r'<a\b[^>]*\bhref="assets/cv/chen-jing-cv\.pdf"[^>]*>Resume</a>', html), "Missing Resume link"
 assert 'data-friend-count-static="true">2</span>' in html, "Baseline Friends count changed"
 assert 'data-deployment-repository="edwinjing/edwinjing.github.io"' in html
 assert "path=https%3A%2F%2Fedwinjing-blog.com%2F" in html, "Shared visitor key changed"
