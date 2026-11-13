@@ -76,7 +76,7 @@ description: "Personal academic homepage of Chen Jing (经宸), a Mechanical Eng
       <p style="--profile-reveal-order: 2;">Recently, I contributed to <a href="https://arxiv.org/abs/2609.18930">a whole-body controller for a bipedal mobile manipulator</a> that tracks a single 6-DoF end-effector target, coordinating arm motion, posture adaptation, and stepping without explicit locomotion commands. My work covers:</p>
       <ul style="--profile-reveal-order: 3;">
       <li><strong>Reward tuning</strong> for RL-based whole-body control in Isaac Lab</li>
-      <li><strong>Sim2Sim validation</strong> of trained policies</li>
+      <li><strong>Sim2Sim validation</strong> of trained policies after transferring them to the MuJoCo simulation environment</li>
       <li><strong>Real-robot deployment</strong> on a LimX TRON 1 biped with an ARX L5 arm</li>
       </ul>
       <p style="--profile-reveal-order: 4;">I have also worked with UMI-based diffusion policy pipelines.</p>
@@ -84,11 +84,11 @@ description: "Personal academic homepage of Chen Jing (经宸), a Mechanical Eng
       <hr style="--profile-reveal-order: 6;">
       <div lang="zh-CN">
       <p style="--profile-reveal-order: 7;">Hi！我是<strong>经宸 (English name: Chen Jing)</strong>，浙江大学–伊利诺伊大学厄巴纳-香槟校区联合学院（<a href="https://zjui.intl.zju.edu.cn/" target="_blank" rel="noopener">ZJUI</a>）机械工程专业大二学生。目前是 <a href="https://physicalintelligence-lab.github.io/" target="_blank" rel="noopener">Physical Intelligence Lab</a> 的本科生科研助理，师从<a href="https://rvclab.github.io/author/liangjing-yang/" target="_blank" rel="noopener">杨量景教授</a>，此前师从<a href="https://physicalintelligence-lab.github.io/author/hua-chen/" target="_blank" rel="noopener">谌骅教授</a>。</p>
-      <p style="--profile-reveal-order: 8;">我的研究方向是具身智能，尤其关注足式运动与全身移动操作（loco-manipulation）。同时，我也乐于探索其他推动机器人发展的方向，例如视觉-语言-动作模型（VLA）与世界模型。</p>
+      <p style="--profile-reveal-order: 8;">我的研究方向是具身智能，尤其关注足式运动与全身移动操作。同时，我也乐于探索其他推动机器人发展的方向，例如视觉-语言-动作模型（VLA）与世界模型。</p>
       <p style="--profile-reveal-order: 9;">近期，我参与了<a href="https://arxiv.org/abs/2609.18930">一项双足移动操作机器人的全身控制器工作</a>：仅给定一个 6-DoF 末端执行器目标，控制器即可协调手臂运动、姿态调整与迈步，无需显式的运动指令。我主要负责：</p>
       <ul style="--profile-reveal-order: 10;">
       <li>在 Isaac Lab 中为基于强化学习的全身控制进行<strong>奖励函数调参</strong></li>
-      <li>对训练得到的策略进行 <strong>Sim2Sim 验证</strong></li>
+      <li>将训练得到的策略迁移到 MuJoCo 仿真环境中进行 <strong>Sim2Sim 验证</strong></li>
       <li>在搭载 ARX L5 机械臂的 LimX TRON 1 双足机器人上进行<strong>真机部署</strong></li>
       </ul>
       <p style="--profile-reveal-order: 11;">此外，我还接触过基于 UMI 的 diffusion policy 流程。</p>
